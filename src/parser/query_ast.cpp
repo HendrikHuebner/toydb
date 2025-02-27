@@ -38,6 +38,9 @@ std::ostream& Select::print(std::ostream& os) const {
 
     os << "SELECT ";
 
+    if (distinct)
+        os << "DISTINCT ";
+
     for (size_t i = 0; i < columns.size(); ++i) {
         os << columns[i];
         if (i < columns.size() - 1) 
@@ -50,15 +53,15 @@ std::ostream& Select::print(std::ostream& os) const {
             os << ", ";
     }
 
-    if (join) {
-        os << *join;
-    }
-
     if (where) {
         os << *where;
     }
 
-    return os << ";";
+    if (orderBy) {
+        os << " ORDER BY " << orderBy.value();
+    }
+
+    return os;
 }
 
 

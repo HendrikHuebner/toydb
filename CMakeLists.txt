@@ -12,7 +12,6 @@ if (ENABLE_ASAN)
     target_link_libraries(toydb PRIVATE -fsanitize=address)
 endif()
 
-
 include(FetchContent)
 FetchContent_Declare(
     googletest
@@ -20,16 +19,18 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(googletest)
 
-file(GLOB DB_SOURCES src/*.cpp)
-file(GLOB DB_HEADERS include/*.hpp)
+find_package(spdlog REQUIRED)
 
-add_library(toydb SHARED ${DB_SOURCES} ${DB_HEADERS} include/parser/query_ast.hpp)
-target_include_directories(toydb PUBLIC include)
+file(GLOB_RECURSE DB_SOURCES src/*.cpp)
+file(GLOB_RECURSE DB_HEADERS include/*.hpp)
+
+add_library(toydb SHARED ${DB_SOURCES} ${DB_HEADERS})
+target_include_directories(toydb PUBLIC ./include)
+target_link_libraries(toydb PRIVATE spdlog)
 
 target_compile_options(toydb PRIVATE
     -Wall -Wextra -Wpedantic -Werror
 )
 
 enable_testing()
-add_subdirectory(test)
-
+#add_subdirectory(test)

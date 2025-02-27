@@ -1,0 +1,117 @@
+#pragma once
+
+#include <cassert>
+#include <cctype>
+#include <optional>
+#include <string>
+#include "common/result.hpp"
+#include "common/assert.hpp"
+
+namespace toydb {
+
+namespace parser {
+
+enum class TokenType {
+    IdentifierType,
+    NumberLiteral,
+    BooleanLiteral,
+    StringLiteral,
+    NullLiteral,
+    EndOfFile,
+
+    OpGreaterThan,
+    OpLessThan,
+    OpGreaterEq,
+    OpLessEq,
+    OpEquals,
+    OpNotEquals,
+
+    KeyInsertInto,
+    KeyValues,
+    KeySelect,
+    KeyFrom,
+    KeyWhere,
+    KeyJoin,
+    KeyOn,
+    KeyOrderBy,
+    KeyUpdate,
+    KeySet,
+    KeyDeleteFrom,
+
+    ParenthesisR,
+    ParenthesisL,
+    Comma
+};
+
+
+struct Token {
+
+    TokenType type;
+    std::string_view lexeme;
+
+    Token(TokenType type) : type(type), lexeme("") {}
+
+    Token(TokenType type, std::string_view lexeme) : type(type), lexeme(lexeme) {}
+
+    std::string toString() const;
+};
+
+
+/**
+ * @brief Tokenizes a query. The next Token can be peeked/popped similar to a stack.
+ * 
+ */
+class TokenStream {
+
+    // input query
+    std::string_view query;
+
+    // current position in query
+    size_t position = 0;
+    size_t line = 1;
+    size_t lineStart = 0;
+
+    mutable std::optional<Token> top = std::nullopt;
+
+   public:
+    explicit TokenStream(std::string_view query) : query(query), position(0) {}
+
+    /**
+     * @brief Returns next token in query and moves to the next token
+     * 
+     * @return Token 
+     */
+    [[maybe_unused]] Token next();
+
+    /**
+    * @brief Returns next token in query without moving to the next token
+    * 
+    * @return Token 
+    */
+    Token peek();
+
+    /**
+     * @brief Returns true if there no more tokens to read
+     */
+    bool empty();
+
+    std::string_view getCurrentLine() const {
+        return query.substr(lineStart, std::max(query.size() - 1, position + 1));
+    }
+
+    size_t getCurrentLineNumber() const { return line; }
+
+    size_t getLinePosition() const { return position - lineStart - 1; }
+
+   private:
+    Result<char> moveToNextToken();
+
+    Token lexOperator();
+    Token lexWord();
+    Token lexNumber();
+    Token lexPunctuationChar();
+};
+
+} // end namespace parser
+
+} // end namespace toydb
