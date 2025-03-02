@@ -5,7 +5,6 @@
 #include <memory>
 #include <iostream>
 #include "common/assert.hpp"
-#include "common/concepts.hpp"
 
 namespace toydb {
 
@@ -16,7 +15,7 @@ enum class Operator { EQUAL, NOT_EQUAL, GREATER, LESS, GREATER_EQUAL, LESS_EQUAL
 class ASTNode {
 public:
     virtual ~ASTNode() = default;
-    virtual std::ostream& print(std::ostream&) const = 0;
+    virtual std::ostream& print(std::ostream&) const noexcept = 0;
     friend std::ostream& operator<<(std::ostream&, const ASTNode&);
 };
 
@@ -31,30 +30,20 @@ struct Column : public ASTNode {
     std::string name;
     std::string alias;
 
-    Column(std::string name) : name(std::move(name)) {}
-    Column(std::string name, std::string alias) : name(std::move(name)), alias(std::move(alias)) {}
+    Column(std::string name) noexcept : name(std::move(name)) {}
+    Column(std::string name, std::string alias) noexcept : name(std::move(name)), alias(std::move(alias)) {}
     
-    Column() = default;
-    Column(const Column& other) = default;
-    Column(Column&& other) = default;
-    Column& operator=(const Column& other) = default;
-    Column& operator=(Column&& other) = default;
-    std::ostream& print(std::ostream&) const override;
+    std::ostream& print(std::ostream&) const noexcept override;
 };
 
 struct Table : public ASTNode {
     std::string name;
     std::string alias;
 
-    Table(std::string name) : name(std::move(name)) {}
-    Table(std::string name, std::string alias) : name(std::move(name)), alias(std::move(alias)) {}
+    Table(std::string name) noexcept : name(std::move(name)) {}
+    Table(std::string name, std::string alias) noexcept : name(std::move(name)), alias(std::move(alias)) {}
 
-    Table() = default;
-    Table(const Table& other) = default;
-    Table(Table&& other) = default;
-    Table& operator=(const Table& other) = default;
-    Table& operator=(Table&& other) = default;
-    std::ostream& print(std::ostream&) const override;
+    std::ostream& print(std::ostream&) const noexcept override;
 };
 
 
@@ -63,13 +52,9 @@ struct Expression : public ASTNode {};
 struct Literal : public Expression {
     std::string value;
 
-    Literal(std::string value) : value(std::move(value)) {}    
+    Literal(std::string value) noexcept : value(std::move(value)) {}    
 
-    Literal(const Literal& other) = default;
-    Literal(Literal&& other) = default;
-    Literal& operator=(const Literal& other) = default;
-    Literal& operator=(Literal&& other) = default;
-    std::ostream& print(std::ostream&) const override;
+    std::ostream& print(std::ostream&) const noexcept override;
 };
 
 struct Condition : public Expression {
@@ -80,10 +65,10 @@ struct Condition : public Expression {
         return right == nullptr;
     }
 
-    std::ostream& print(std::ostream&) const override;
+    std::ostream& print(std::ostream&) const noexcept override;
 
 private:
-    static std::string getOperatorString(Operator op) {
+    static std::string getOperatorString(Operator op) noexcept {
         switch (op) {
             case Operator::EQUAL: return "=";
             case Operator::NOT_EQUAL: return "!=";
@@ -104,10 +89,10 @@ struct TableExpression : public ASTNode {
     std::unique_ptr<TableExpression> join;
     std::unique_ptr<Expression> condition;
 
-    TableExpression(Table table) : table(table) {}
-    TableExpression(Table table, std::unique_ptr<TableExpression> join) : table(table), join(std::move(join)) {}
+    TableExpression(Table table) noexcept : table(table) {}
+    TableExpression(Table table, std::unique_ptr<TableExpression> join) noexcept : table(table), join(std::move(join)) {}
 
-    std::ostream& print(std::ostream&) const override;
+    std::ostream& print(std::ostream&) const noexcept override;
 };
 
 
@@ -119,7 +104,7 @@ struct Select : public ASTNode {
     std::optional<Column> orderBy;
     bool distinct = false;
 
-    std::ostream& print(std::ostream&) const override;
+    std::ostream& print(std::ostream&) const noexcept override;
 };
 
 std::ostream& operator<<(std::ostream& os, const ASTNode& node);

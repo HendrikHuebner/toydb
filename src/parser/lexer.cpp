@@ -42,18 +42,19 @@ const CharType lut[128] = {
 /**
  * @brief Returns CharType of c
  */
-CharType lookupChar(unsigned char c) {
+CharType lookupChar(unsigned char c) noexcept {
     if (c >= 128)
         return X;
 
     return lut[c];
 }
 
-Token TokenStream::next() {
+Token TokenStream::next() noexcept {
+    Token token;
+
     if (top) {
-        Token token = top.value();
+        token = top.value();
         top = std::nullopt;
-        return token;
     }
 
     Result<char> c = moveToNextToken();
@@ -65,44 +66,46 @@ Token TokenStream::next() {
     CharType charType = lookupChar(c.get());
 
     switch (charType) {
-        case CharType::A: return lexWord();
-        case CharType::N: return lexNumber();
-        case CharType::O: return lexOperator();
-        case CharType::P: return lexPunctuationChar();
+        case CharType::A: token = lexWord();
+        case CharType::N: token = lexNumber();
+        case CharType::O: token = lexOperator();
+        case CharType::P: token = lexPunctuationChar();
         default: {
             position++;
             exit(EXIT_FAILURE);
         }
     }
+
+    return token;
 }
 
-Token TokenStream::peek() {
+Token TokenStream::peek() noexcept {
     if (top) {
         return top.value();
     }
 
-    Token next = next();
-    this->top = std::make_optional<Token>(next);
+    Token next = this->next();
+    top = std::make_optional<Token>(next);
     return next;
 }
 
-bool TokenStream::empty() {
+bool TokenStream::empty() noexcept {
     return peek().type == TokenType::EndOfFile;
 }
 
-Result<char> TokenStream::moveToNextToken() {
-    while (position < input.size()) {
-        char c = input[position];
+Result<char> TokenStream::moveToNextToken() noexcept {
+    while (position < query.size()) {
+        char c = query[position];
 
-        if (c == '/' && position + 1 < input.size()) {
-            if (input[++position] == '/') {
+        if (c == '/' && position + 1 < query.size()) {
+            if (query[++position] == '/') {
 
                 // skip comment
-                while (position < input.size() && input[position] != '\n') {
+                while (position < query.size() && query[position] != '\n') {
                     position++;
                 }
 
-                if (position >= input.size()) {
+                if (position >= query.size()) {
                     return Error{};
                 }
 
@@ -124,14 +127,14 @@ Result<char> TokenStream::moveToNextToken() {
             position++;
 
         } else {
-            return c;
+            return {c};
         }
     }
 
-    return 0;
+    return Error{};
 }
 
-Token TokenStream::lexOperator() {
+Token TokenStream::lexOperator() noexcept {
     char c = query[position];
     char c2 = (position + 1 >= query.size()) ? 0 : query[position + 1];
 
@@ -165,22 +168,22 @@ Token TokenStream::lexOperator() {
     position++;
 
     if (!op.has_value()) {
-        DiagnosticsManager::get().unknownToken(*this);
-        exit(EXIT_FAILURE);
+        return { TokenType::Unknown };
 
     } else {
         return {op.value()};
     }
 }
 
-Token TokenStream::lexWord() {
+Token TokenStream::lexWord() noexcept {
     size_t start = position;
+    char c = query[position];
 
-    while (position < input.size() && isBaseChar(input[position])) {
+    while (position < query.size() && (std::isalpha(c) || c == '_')) {
         position++;
     }
 
-    std::string_view lexeme = input.substr(start, position - start);
+    std::string_view lexeme = query.substr(start, position - start);
 
     if (keywords.find(lexeme) != keywords.end()) {
         return {keywords.at(lexeme)};
@@ -189,28 +192,34 @@ Token TokenStream::lexWord() {
     return {TokenType::IdentifierType, lexeme};
 }
 
-Token TokenStream::lexNumber() {
+Token TokenStream::lexNumber() noexcept {
     size_t start = position;
+    bool isFloat{false};
+    while (position < query.size()) {
+        char c = query[position];
+        if (std::isdigit(c))
+            position++;
 
-    while (position < input.size() && std::isdigit(input[position])) {
-        position++;
+        else if (c == '.' && !isFloat) {
+            isFloat = true;
+            position++;
+
+        } else {
+            break;
+        }
     }
 
-    return {TokenType::NumberLiteral, input.substr(start, position)};
+    return {isFloat ? TokenType::IntLiteral : TokenType::FloatLiteral,
+     query.substr(start, position)};
 }
 
-Token TokenStream::lexPunctuationChar() {
-    switch (input[position++]) {
+Token TokenStream::lexPunctuationChar() noexcept {
+    switch (query[position++]) {
         case ';': return TokenType::EndOfStatement;
         case '(': return TokenType::ParenthesisL;
         case ')': return TokenType::ParenthesisR;
-        case '[': return TokenType::BracketL;
-        case ']': return TokenType::BracketR;
-        case '{': return TokenType::BraceL;
-        case '}': return TokenType::BraceR;
-        case '@': return TokenType::SizeSpec;
         case ',': return TokenType::Comma;
-        default: throw std::runtime_error("Invalid punctuation character!");
+        default: return TokenType::Unknown;
     }
 }
 
@@ -220,9 +229,8 @@ std::string Token::toString() const {
         case TokenType::OpLessThan: return "<";
         case TokenType::OpGreaterEq: return ">=";
         case TokenType::OpLessEq: return "<=";
-        case TokenType::OpEquals: return "==";
+        case TokenType::OpEquals: return "=";
         case TokenType::OpNotEquals: return "!=";
-        case TokenType::OpAssign: return "=";
 
         case TokenType::KeyInsertInto: return "INSERT INTO";
         case TokenType::KeyValues: return "VALUES";
@@ -242,7 +250,8 @@ std::string Token::toString() const {
         case TokenType::Comma: return ",";
 
         case TokenType::IdentifierType:
-        case TokenType::NumberLiteral:
+        case TokenType::IntLiteral:
+        case TokenType::FloatLiteral:
         case TokenType::BooleanLiteral:
         case TokenType::StringLiteral: 
             return std::string(lexeme);

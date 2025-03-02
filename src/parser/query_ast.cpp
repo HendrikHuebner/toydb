@@ -6,9 +6,9 @@ namespace toydb {
 namespace ast {
 
 
-std::ostream& Table::print(std::ostream& os) const { return os << name; }
+std::ostream& Table::print(std::ostream& os) const noexcept { return os << name; }
 
-std::ostream& TableExpression::print(std::ostream& os) const { 
+std::ostream& TableExpression::print(std::ostream& os) const noexcept { 
     if (join) {
         if (condition) {
             return os << table << " JOIN " << join << " ON " << *condition;
@@ -20,11 +20,11 @@ std::ostream& TableExpression::print(std::ostream& os) const {
     } 
 }
 
-std::ostream& Column::print(std::ostream& os) const { return os << name; }
+std::ostream& Column::print(std::ostream& os) const noexcept { return os << name; }
 
-std::ostream& Literal::print(std::ostream& os) const { return os << value; };
+std::ostream& Literal::print(std::ostream& os) const  noexcept { return os << value; };
 
-std::ostream& Condition::print(std::ostream& os) const {
+std::ostream& Condition::print(std::ostream& os) const noexcept {
     if (isUnop()) {
         return os << getOperatorString(op) << " (" << left << ")";
     } else {
@@ -32,9 +32,9 @@ std::ostream& Condition::print(std::ostream& os) const {
     }
 }
 
-std::ostream& Select::print(std::ostream& os) const {
-    ASSERT(columns.size() > 0, "Select node must have at least one column");
-    ASSERT(tables.size() > 0, "Select node must have at least one table");
+std::ostream& Select::print(std::ostream& os) const noexcept {
+    debug_assert(columns.size() > 0, "Select node must have at least one column");
+    debug_assert(tables.size() > 0, "Select node must have at least one table");
 
     os << "SELECT ";
 

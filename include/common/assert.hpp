@@ -1,7 +1,8 @@
-#include <iostream>
 #ifdef NDEBUG
 #define ASSERT(...)
 #else
+
+#include <iostream>
 
 [[maybe_unused]]
 static void printAssertFailed(std::string condition, std::string message) {
@@ -10,7 +11,7 @@ static void printAssertFailed(std::string condition, std::string message) {
               << std::endl;
 }
 
-#define ASSERT(cond, msg)                \
+#define debug_assert(cond, msg)                \
     if (!(cond)) {                       \
         printAssertFailed(#cond, (msg)); \
     }

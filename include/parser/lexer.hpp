@@ -13,10 +13,12 @@ namespace parser {
 
 enum class TokenType {
     IdentifierType,
-    NumberLiteral,
+    IntLiteral,
+    FloatLiteral,
     BooleanLiteral,
     StringLiteral,
     NullLiteral,
+    EndOfStatement,
     EndOfFile,
 
     OpGreaterThan,
@@ -40,7 +42,9 @@ enum class TokenType {
 
     ParenthesisR,
     ParenthesisL,
-    Comma
+    Comma,
+
+    Unknown
 };
 
 
@@ -49,8 +53,7 @@ struct Token {
     TokenType type;
     std::string_view lexeme;
 
-    Token(TokenType type) : type(type), lexeme("") {}
-
+    Token(TokenType type = TokenType::Unknown) : type(type), lexeme("") {}
     Token(TokenType type, std::string_view lexeme) : type(type), lexeme(lexeme) {}
 
     std::string toString() const;
@@ -81,35 +84,35 @@ class TokenStream {
      * 
      * @return Token 
      */
-    [[maybe_unused]] Token next();
+    [[maybe_unused]] Token next() noexcept;
 
     /**
     * @brief Returns next token in query without moving to the next token
     * 
     * @return Token 
     */
-    Token peek();
+    Token peek() noexcept;
 
     /**
      * @brief Returns true if there no more tokens to read
      */
-    bool empty();
+    bool empty() noexcept;
 
-    std::string_view getCurrentLine() const {
+    std::string_view getCurrentLine() const noexcept {
         return query.substr(lineStart, std::max(query.size() - 1, position + 1));
     }
 
-    size_t getCurrentLineNumber() const { return line; }
+    size_t getCurrentLineNumber() const noexcept { return line; }
 
-    size_t getLinePosition() const { return position - lineStart - 1; }
+    size_t getLinePosition() const noexcept { return position - lineStart - 1; }
 
    private:
-    Result<char> moveToNextToken();
+    Result<char> moveToNextToken() noexcept;
 
-    Token lexOperator();
-    Token lexWord();
-    Token lexNumber();
-    Token lexPunctuationChar();
+    Token lexOperator() noexcept;
+    Token lexWord() noexcept;
+    Token lexNumber() noexcept;
+    Token lexPunctuationChar() noexcept;
 };
 
 } // end namespace parser
