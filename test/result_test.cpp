@@ -8,14 +8,17 @@ using namespace toydb;
 TEST(ResultTest, BasicTest) {
     int i = 99;
     std::string s{"wee"};
+    
     [[maybe_unused]] toydb::Result<std::string> result1 = Success("foo");
     [[maybe_unused]] toydb::Result<int> result2 = Success(i);
     [[maybe_unused]] toydb::Result<std::unique_ptr<int>> result3 = Success(std::make_unique<int>(i));
     [[maybe_unused]] toydb::Result<bool> result4 = Success(true);
     [[maybe_unused]] toydb::Result<void, int> result5 = Success();
     [[maybe_unused]] toydb::Result<int, std::string> result6 = Success(123);
-    auto t = Error( "boo" );
-    [[maybe_unused]] toydb::Result<int, std::string> result7 = t;
+
+    auto temp = Error( "boo" );
+    [[maybe_unused]] toydb::Result<int, std::string> result7 = temp;
+
     [[maybe_unused]] toydb::Result<void, int> result8 = Error(1);
     [[maybe_unused]] toydb::Result<std::string, std::string> result9 = Error(s);
 

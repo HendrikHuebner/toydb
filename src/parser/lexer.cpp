@@ -116,7 +116,7 @@ Result<char> TokenStream::moveToNextToken() noexcept {
                 }
 
                 if (position >= query.size()) {
-                    return Result<char>::make_error();
+                    return Error();
                 }
 
                 position++;
@@ -137,11 +137,11 @@ Result<char> TokenStream::moveToNextToken() noexcept {
             position++;
 
         } else {
-            return Result<char>::make_success(c);
+            return Success(c);
         }
     }
 
-    return Result<char>::make_error();
+    return Error();
 }
 
 Token TokenStream::lexOperator() noexcept {

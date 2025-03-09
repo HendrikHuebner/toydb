@@ -294,8 +294,6 @@ Result<std::unique_ptr<ast::QueryAST>, std::string> Parser::parseQuery() noexcep
     auto token = ts.peek();
     ast::ASTNode* query{};
 
-    using result_t = Result<std::unique_ptr<ast::QueryAST>, std::string>;
-
     try {
         switch (token.type) {
             case TokenType::KeyInsert:
@@ -311,11 +309,11 @@ Result<std::unique_ptr<ast::QueryAST>, std::string> Parser::parseQuery() noexcep
                 query = parseCreateTable().release();
                 break;
             default:
-                return result_t::make_error("Unsupported query type: " + token.toString());
+                return Error("Unsupported query type: " + token.toString());
         }
     } catch (const ParserException& e) {
         getLogger().info("Query parsing failed: {}", e.what());
-        return result_t::make_error(e.what());
+        return Error(e.what());
     }
 
     if (ts.peek().type == TokenType::EndOfStatement) {
@@ -327,7 +325,7 @@ Result<std::unique_ptr<ast::QueryAST>, std::string> Parser::parseQuery() noexcep
     debug_assert(query != nullptr, "Query AST should not be null");
     getLogger().trace("Successfully parsed query");
 
-    return result_t::make_success(std::make_unique<ast::QueryAST>(query));
+    return Success(std::make_unique<ast::QueryAST>(query));
 }
 
 } // namespace parser

@@ -9,12 +9,6 @@
 
 namespace toydb {
 
-template<typename lambda_t, typename... Args>
-concept NoThrowLambda = std::is_nothrow_invocable_v<lambda_t, Args...>;
-
-template <typename T, typename... Args>
-concept Constructible = std::is_constructible_v<T, Args...>;
-
 namespace detail {
 
     struct Empty {
@@ -38,12 +32,6 @@ namespace detail {
         } content;
 
         bool isError;
-
-        template <typename T>
-        struct is_storage : std::false_type {};
-
-        template <typename T1, typename T2>
-        struct is_storage<Storage<T1, T2>> : std::true_type {};
 
         template<typename other_data_t, typename other_error_t>
         Storage(std::true_type, Storage<other_data_t, other_error_t>&& other) noexcept
@@ -70,19 +58,18 @@ namespace detail {
         }
 
         template<typename arg_t>
-        Storage(std::true_type, arg_t&& arg) noexcept requires (!is_storage<std::decay_t<arg_t>>::value)
+        Storage(std::true_type, arg_t&& arg) noexcept
             : isError(true) {
             new (&content.error) error_t(std::forward<arg_t>(arg));
         }
 
         template<typename arg_t>
-        Storage(std::false_type, arg_t&& arg) noexcept requires (!is_storage<std::decay_t<arg_t>>::value)
+        Storage(std::false_type, arg_t&& arg) noexcept
             : isError(false) {
             new (&content.data) data_t(std::forward<arg_t>(arg));
         }
 
-
-        ~Storage() {
+        ~Storage() noexcept {
             if (isError)
                 content.data.~data_t();
             else
@@ -107,7 +94,8 @@ namespace detail {
         using error_t = Empty;
 
         template<bool isError_v>
-        Storage(std::bool_constant<isError_v>, Empty) : content(Empty{}), isError(isError_v) {}
+        Storage(std::bool_constant<isError_v>, Empty) noexcept 
+            : content(Empty{}), isError(isError_v) {}
 
         union { Empty data; Empty error; } content;
         bool isError;
@@ -116,7 +104,6 @@ namespace detail {
 
 /**
  * @brief Zero-overhead result type. Stores either a result, an error or neither.
- * 
  */
 template <typename data_t_, typename error_t_ = void>
 struct Result {
@@ -125,23 +112,28 @@ struct Result {
     using error_t = error_t_;
     using storage_t = detail::Storage<data_t, error_t>;
 
-    template <typename... Args, bool isError_v, typename arg_t = typename std::conditional<isError_v, typename storage_t::error_t, typename storage_t::data_t>::type>
+    template <typename... Args, 
+              bool isError_v,
+              typename arg_t = typename std::conditional<isError_v, 
+                    typename storage_t::error_t,
+                    typename storage_t::data_t>::type>
     Result(std::bool_constant<isError_v>, Args&&... args) noexcept
-        : storage(std::bool_constant<isError_v>{}, arg_t(std::forward<Args>(args)...)) {
-    }
+        : storage(std::bool_constant<isError_v>{}, arg_t(std::forward<Args>(args)...)) {}
 
-    template <typename other_data_t, typename other_error_t,
+    template <typename other_data_t,
+              typename other_error_t,
               template <typename, typename> typename other_result_t_>
         requires std::is_base_of_v<Result<other_data_t, other_error_t>,
                                    other_result_t_<other_data_t, other_error_t>>
-    Result(const other_result_t_<other_data_t, other_error_t>& other)
+    Result(const other_result_t_<other_data_t, other_error_t>& other) noexcept
         : storage(other_result_t_<other_data_t, other_error_t>::isError, other.storage) {}
 
-    template <typename other_data_t, typename other_error_t,
+    template <typename other_data_t, 
+              typename other_error_t,
               template <typename, typename> typename other_result_t_>
         requires std::is_base_of_v<Result<other_data_t, other_error_t>,
                                    other_result_t_<other_data_t, other_error_t>>
-    Result(other_result_t_<other_data_t, other_error_t>&& other)
+    Result(other_result_t_<other_data_t, other_error_t>&& other) noexcept
         : storage(other_result_t_<other_data_t, other_error_t>::isError, std::move(other.storage)) {}
 
     /**
@@ -194,22 +186,15 @@ struct Result {
      * 
      * @param callback 
      */
-    template <NoThrowLambda<data_t&> callback_t, typename data_t = data_t> requires storage_t::hasData
-    void onSuccess(const callback_t& callback) noexcept {
-        if (ok()) {
-            callback(storage.getData());
-        }
-    }
-
-    /**
-     * @brief Invokes callback if result is successful
-     * 
-     * @param callback 
-     */
-    template <NoThrowLambda<error_t&> callback_t, typename error_t = error_t> requires storage_t::hasError
-    void onError(const callback_t& callback) noexcept {
+    template <NoThrowLambda<data_t&, const error_t&> callback_t,
+              typename data_t = data_t, 
+              typename error_t = error_t>
+        requires storage_t::hasData && storage_t::hasError
+    data_t& orElse(const callback_t& callback) noexcept {
         if (isError()) {
-            callback(storage.getError());
+            return callback(storage.getError());
+        } else {
+            return get();
         }
     }
 
@@ -232,8 +217,8 @@ struct Success : public Result<data_t_, error_t_> {
     static constexpr std::bool_constant<false> isError{};
 
     template<typename data_t>
-    Success(data_t&& data) : base_t(std::false_type{}, std::forward<data_t>(data)) {}
-    Success() : base_t(std::false_type{}) {}
+    Success(data_t&& data) noexcept : base_t(std::false_type{}, std::forward<data_t>(data)) {}
+    Success() noexcept : base_t(std::false_type{}) {}
 };
 
 template <typename data_t_, typename error_t_>
@@ -242,8 +227,8 @@ struct Error : public Result<data_t_, error_t_> {
     static constexpr std::bool_constant<true> isError{};
 
     template<typename error_t>
-    Error(error_t&& error) : base_t(std::true_type{}, std::forward<error_t>(error)) {}
-    Error() : base_t(std::true_type{}) {}
+    Error(error_t&& error) noexcept : base_t(std::true_type{}, std::forward<error_t>(error)) {}
+    Error() noexcept : base_t(std::true_type{}) {}
 };
 
 template <typename data_t> 
