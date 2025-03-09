@@ -3,6 +3,7 @@
 #include <optional>
 
 #include <unordered_map>
+#include "common/result.hpp"
 
 #include "parser/lexer.hpp"
 
@@ -16,12 +17,21 @@ const std::unordered_map<std::string_view, TokenType> keywords = {
     {"WHERE", TokenType::KeyWhere},
     {"JOIN", TokenType::KeyJoin},
     {"ON", TokenType::KeyOn},
-    {"ORDER", TokenType::KeyOrderBy},
-    {"INSERT", TokenType::KeyInsertInto},
+    {"ORDER", TokenType::KeyOrder},
+    {"BY", TokenType::KeyBy},
+    {"INSERT", TokenType::KeyInsert},
+    {"INTO", TokenType::KeyInto},
     {"UPDATE", TokenType::KeyUpdate},
     {"SET", TokenType::KeySet},
-    {"DELETE", TokenType::KeyDeleteFrom},
+    {"DELETE", TokenType::KeyDelete},
     {"VALUES", TokenType::KeyValues},
+    {"INT", TokenType::KeyIntType},
+    {"FLOAT", TokenType::KeyFloatType},
+    {"CHAR", TokenType::KeyCharType},
+    {"BOOL", TokenType::KeyBoolType},
+    {"NULL", TokenType::NullLiteral},
+    {"TRUE", TokenType::TrueLiteral},
+    {"FALSE", TokenType::FalseLiteral},
 };
 
 enum CharType {
@@ -66,10 +76,10 @@ Token TokenStream::next() noexcept {
     CharType charType = lookupChar(c.get());
 
     switch (charType) {
-        case CharType::A: token = lexWord();
-        case CharType::N: token = lexNumber();
-        case CharType::O: token = lexOperator();
-        case CharType::P: token = lexPunctuationChar();
+        case CharType::A: token = lexWord(); break;
+        case CharType::N: token = lexNumber(); break;
+        case CharType::O: token = lexOperator(); break;
+        case CharType::P: token = lexPunctuationChar(); break;
         default: {
             position++;
             exit(EXIT_FAILURE);
@@ -106,7 +116,7 @@ Result<char> TokenStream::moveToNextToken() noexcept {
                 }
 
                 if (position >= query.size()) {
-                    return Error{};
+                    return Result<char>::make_error();
                 }
 
                 position++;
@@ -127,11 +137,11 @@ Result<char> TokenStream::moveToNextToken() noexcept {
             position++;
 
         } else {
-            return {c};
+            return Result<char>::make_success(c);
         }
     }
 
-    return Error{};
+    return Result<char>::make_error();
 }
 
 Token TokenStream::lexOperator() noexcept {
@@ -186,7 +196,7 @@ Token TokenStream::lexWord() noexcept {
     std::string_view lexeme = query.substr(start, position - start);
 
     if (keywords.find(lexeme) != keywords.end()) {
-        return {keywords.at(lexeme)};
+        return { keywords.at(lexeme) };
     }
 
     return {TokenType::IdentifierType, lexeme};
@@ -223,7 +233,7 @@ Token TokenStream::lexPunctuationChar() noexcept {
     }
 }
 
-std::string Token::toString() const {
+std::string Token::toString() const noexcept {
     switch (type) {
         case TokenType::OpGreaterThan: return ">";
         case TokenType::OpLessThan: return "<";
@@ -232,33 +242,40 @@ std::string Token::toString() const {
         case TokenType::OpEquals: return "=";
         case TokenType::OpNotEquals: return "!=";
 
-        case TokenType::KeyInsertInto: return "INSERT INTO";
+        case TokenType::KeyInsert: return "INSERT";
+        case TokenType::KeyInto: return "INTO";
         case TokenType::KeyValues: return "VALUES";
         case TokenType::KeySelect: return "SELECT";
         case TokenType::KeyFrom: return "FROM";
         case TokenType::KeyWhere: return "WHERE";
+        case TokenType::KeyCreate: return "CREATE";
+        case TokenType::KeyTable: return "TABLE";
         case TokenType::KeyJoin: return "JOIN";
         case TokenType::KeyOn: return "ON";
-        case TokenType::KeyOrderBy: return "ORDER BY";
+        case TokenType::KeyOrder: return "ORDER";
+        case TokenType::KeyBy: return "BY";
         case TokenType::KeyUpdate: return "UPDATE";
         case TokenType::KeySet: return "SET";
-        case TokenType::KeyDeleteFrom: return "DELETE FROM";
+        case TokenType::KeyDelete: return "DELETE";
         case TokenType::NullLiteral: return "NULL";
+        case TokenType::TrueLiteral: return "TRUE";
+        case TokenType::FalseLiteral: return "FALSE";
 
         case TokenType::ParenthesisR: return ")";
         case TokenType::ParenthesisL: return "(";
         case TokenType::Comma: return ",";
+        case TokenType::Asterisk: return "*";
 
         case TokenType::IdentifierType:
         case TokenType::IntLiteral:
         case TokenType::FloatLiteral:
-        case TokenType::BooleanLiteral:
         case TokenType::StringLiteral: 
             return std::string(lexeme);
 
         case TokenType::EndOfFile: return "<EOF>";
+        case TokenType::Unknown: return "<UNKNOWN>";
 
-        default: return "<UNKNOWN>";
+        default: return "?";
     }
 }
 

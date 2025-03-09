@@ -4,13 +4,14 @@
 #include <vector>
 #include <memory>
 #include <iostream>
-#include "common/assert.hpp"
 
 namespace toydb {
 
 namespace ast {
 
 enum class Operator { EQUAL, NOT_EQUAL, GREATER, LESS, GREATER_EQUAL, LESS_EQUAL, AND, OR, NOT };
+
+enum class DataType { INT, FLOAT, STRING, BOOL };
 
 class ASTNode {
 public:
@@ -30,8 +31,8 @@ struct Column : public ASTNode {
     std::string name;
     std::string alias;
 
-    Column(std::string name) noexcept : name(std::move(name)) {}
-    Column(std::string name, std::string alias) noexcept : name(std::move(name)), alias(std::move(alias)) {}
+    Column(const std::string& name) noexcept : name(name) {}
+    Column(const std::string& name, const std::string& alias) noexcept : name(name), alias(alias) {}
     
     std::ostream& print(std::ostream&) const noexcept override;
 };
@@ -40,8 +41,8 @@ struct Table : public ASTNode {
     std::string name;
     std::string alias;
 
-    Table(std::string name) noexcept : name(std::move(name)) {}
-    Table(std::string name, std::string alias) noexcept : name(std::move(name)), alias(std::move(alias)) {}
+    Table(const std::string& name) noexcept : name(name) {}
+    Table(const std::string& name, const std::string& alias) noexcept : name(name), alias(alias) {}
 
     std::ostream& print(std::ostream&) const noexcept override;
 };
@@ -52,7 +53,7 @@ struct Expression : public ASTNode {};
 struct Literal : public Expression {
     std::string value;
 
-    Literal(std::string value) noexcept : value(std::move(value)) {}    
+    Literal(const std::string& value) noexcept : value(value) {}    
 
     std::ostream& print(std::ostream&) const noexcept override;
 };
@@ -89,15 +90,62 @@ struct TableExpression : public ASTNode {
     std::unique_ptr<TableExpression> join;
     std::unique_ptr<Expression> condition;
 
-    TableExpression(Table table) noexcept : table(table) {}
-    TableExpression(Table table, std::unique_ptr<TableExpression> join) noexcept : table(table), join(std::move(join)) {}
+    TableExpression(const Table& table) noexcept : table(table) {}
+    TableExpression(const Table& table, std::unique_ptr<TableExpression> join) noexcept : table(table), join(std::move(join)) {}
 
     std::ostream& print(std::ostream&) const noexcept override;
 };
 
 
-struct Select : public ASTNode {
+struct ColumnDefinition : public ASTNode {
+    std::string name;
+    DataType type;
 
+    ColumnDefinition(const std::string& name, DataType type) noexcept 
+        : name(name), type(std::move(type)) {}
+
+    std::ostream& print(std::ostream&) const noexcept override;
+};
+
+struct CreateTable : public ASTNode {
+    std::string tableName;
+    std::vector<ColumnDefinition> columns;
+
+    CreateTable(const std::string& tableName) noexcept : tableName(tableName) {}
+
+    std::ostream& print(std::ostream&) const noexcept override;
+};
+
+struct Insert : public ASTNode {
+    std::string tableName;
+    std::vector<std::string> columnNames;
+    std::vector<std::vector<std::unique_ptr<Expression>>> values;
+
+    Insert(const std::string& tableName) noexcept : tableName(tableName) {}
+
+    std::ostream& print(std::ostream&) const noexcept override;
+};
+
+struct Update : public ASTNode {
+    std::string tableName;
+    std::vector<std::pair<std::string, std::unique_ptr<Expression>>> assignments;
+    std::unique_ptr<Expression> where;
+
+    Update(const std::string& tableName) noexcept : tableName(tableName) {}
+
+    std::ostream& print(std::ostream&) const noexcept override;
+};
+
+struct Delete : public ASTNode {
+    std::string tableName;
+    std::unique_ptr<Expression> where;
+
+    Delete(const std::string& tableName) noexcept : tableName(tableName) {}
+
+    std::ostream& print(std::ostream&) const noexcept override;
+};
+
+struct Select : public ASTNode {
     std::vector<Column> columns;
     std::vector<TableExpression> tables;
     std::unique_ptr<Expression> where;

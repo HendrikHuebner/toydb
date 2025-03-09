@@ -2,10 +2,10 @@
 
 #include <cassert>
 #include <cctype>
+#include <cstddef>
 #include <optional>
 #include <string>
 #include "common/result.hpp"
-#include "common/assert.hpp"
 
 namespace toydb {
 
@@ -15,7 +15,8 @@ enum class TokenType {
     IdentifierType,
     IntLiteral,
     FloatLiteral,
-    BooleanLiteral,
+    TrueLiteral,
+    FalseLiteral,
     StringLiteral,
     NullLiteral,
     EndOfStatement,
@@ -28,20 +29,30 @@ enum class TokenType {
     OpEquals,
     OpNotEquals,
 
-    KeyInsertInto,
+    KeyInsert,
+    KeyInto,
     KeyValues,
     KeySelect,
     KeyFrom,
     KeyWhere,
     KeyJoin,
     KeyOn,
-    KeyOrderBy,
+    KeyOrder,
+    KeyBy,
     KeyUpdate,
     KeySet,
-    KeyDeleteFrom,
+    KeyDelete,
+    KeyCreate,
+    KeyTable,
 
-    ParenthesisR,
+    KeyBoolType,
+    KeyIntType,
+    KeyFloatType,
+    KeyCharType,
+
+    Asterisk,
     ParenthesisL,
+    ParenthesisR,
     Comma,
 
     Unknown
@@ -56,7 +67,7 @@ struct Token {
     Token(TokenType type = TokenType::Unknown) : type(type), lexeme("") {}
     Token(TokenType type, std::string_view lexeme) : type(type), lexeme(lexeme) {}
 
-    std::string toString() const;
+    std::string toString() const noexcept;
 };
 
 
@@ -77,7 +88,7 @@ class TokenStream {
     mutable std::optional<Token> top = std::nullopt;
 
    public:
-    explicit TokenStream(std::string_view query) : query(query), position(0) {}
+    explicit TokenStream(std::string_view query) noexcept : query(query), position(0) {}
 
     /**
      * @brief Returns next token in query and moves to the next token

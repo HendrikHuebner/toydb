@@ -1,5 +1,6 @@
 #include "parser/query_ast.hpp"
 #include <ostream>
+#include "common/assert.hpp"
 
 namespace toydb {
 
@@ -67,6 +68,75 @@ std::ostream& Select::print(std::ostream& os) const noexcept {
 
 std::ostream& operator<<(std::ostream& os, const ASTNode& node) {
     return node.print(os);
+}
+
+std::string getDataTypeString(DataType type) noexcept {
+    switch (type) {
+        case DataType::INT: return "INT";
+        case DataType::FLOAT: return "FLOAT";
+        case DataType::STRING: return "STRING";
+        case DataType::BOOL: return "BOOL";
+        default: return "UNKNOWN";
+    }
+}
+
+std::ostream& ColumnDefinition::print(std::ostream& os) const noexcept {
+    return os << name << " " << getDataTypeString(type);
+}
+
+std::ostream& CreateTable::print(std::ostream& os) const noexcept {
+    os << "CREATE TABLE " << tableName << " (";
+    for (size_t i = 0; i < columns.size(); ++i) {
+        os << columns[i];
+        if (i < columns.size() - 1)
+            os << ", ";
+    }
+    return os << ")";
+}
+
+std::ostream& Insert::print(std::ostream& os) const noexcept {
+    os << "INSERT INTO " << tableName;
+    if (!columnNames.empty()) {
+        os << " (";
+        for (size_t i = 0; i < columnNames.size(); ++i) {
+            os << columnNames[i];
+            if (i < columnNames.size() - 1)
+                os << ", ";
+        }
+        os << ")";
+    }
+    os << " VALUES ";
+    for (size_t i = 0; i < values.size(); ++i) {
+        os << "(";
+        for (size_t j = 0; j < values[i].size(); ++j) {
+            os << *values[i][j];
+            if (j < values[i].size() - 1)
+                os << ", ";
+        }
+        os << ")";
+        if (i < values.size() - 1)
+            os << ", ";
+    }
+    return os;
+}
+
+std::ostream& Update::print(std::ostream& os) const noexcept {
+    os << "UPDATE " << tableName << " SET ";
+    for (size_t i = 0; i < assignments.size(); ++i) {
+        os << assignments[i].first << " = " << *assignments[i].second;
+        if (i < assignments.size() - 1)
+            os << ", ";
+    }
+    if (where)
+        os << " WHERE " << *where;
+    return os;
+}
+
+std::ostream& Delete::print(std::ostream& os) const noexcept {
+    os << "DELETE FROM " << tableName;
+    if (where)
+        os << " WHERE " << *where;
+    return os;
 }
 
 std::ostream& operator<<(std::ostream& os, const QueryAST& ast) {
