@@ -85,6 +85,9 @@ namespace detail {
         static constexpr bool hasData = false;
         static constexpr bool hasError = false;
         
+        using data_t = Empty;
+        using error_t = Empty;
+
         union { Empty data; Empty error; } content;
         bool isError;
     };
@@ -101,7 +104,7 @@ struct Result {
     using error_t = error_t_;
     using storage_t = detail::Storage<data_t, error_t>;
 
-    template <typename... Args, bool isError_v, typename arg_t = typename std::conditional<isError_v, error_t, data_t>::type>
+    template <typename... Args, bool isError_v, typename arg_t = typename std::conditional<isError_v, typename storage_t::error_t, typename storage_t::data_t>::type>
     Result(std::bool_constant<isError_v>, Args&&... args) noexcept
         : storage(storage_t{std::bool_constant<isError_v>{}, arg_t(std::forward<Args>(args)...)}) {
     }
