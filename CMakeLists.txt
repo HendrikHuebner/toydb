@@ -33,4 +33,4 @@ target_compile_options(toydb PRIVATE
 )
 
 enable_testing()
-#add_subdirectory(test)
+add_subdirectory(test)
