@@ -12,9 +12,9 @@ std::ostream& Table::print(std::ostream& os) const noexcept { return os << name;
 std::ostream& TableExpression::print(std::ostream& os) const noexcept { 
     if (join) {
         if (condition) {
-            return os << table << " JOIN " << join << " ON " << *condition;
+            return os << table << " JOIN " << *join << " ON " << *condition;
         } else {
-            return os << table << " JOIN " << join;
+            return os << table << " JOIN " << *join;
         }
     } else {
         return os << table;
@@ -27,9 +27,9 @@ std::ostream& Literal::print(std::ostream& os) const  noexcept { return os << va
 
 std::ostream& Condition::print(std::ostream& os) const noexcept {
     if (isUnop()) {
-        return os << getOperatorString(op) << " (" << left << ")";
+        return os << getOperatorString(op) << " (" << *left << ")";
     } else {
-        return os << "(" << left << " " << getOperatorString(op) << " " << right << ")";
+        return os << "(" << *left << " " << getOperatorString(op) << " " << *right << ")";
     }
 }
 
@@ -73,7 +73,6 @@ std::ostream& operator<<(std::ostream& os, const ASTNode& node) {
 std::string getDataTypeString(DataType type) noexcept {
     switch (type) {
         case DataType::INT: return "INT";
-        case DataType::FLOAT: return "FLOAT";
         case DataType::STRING: return "STRING";
         case DataType::BOOL: return "BOOL";
         default: return "UNKNOWN";

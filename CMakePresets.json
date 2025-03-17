@@ -7,11 +7,21 @@
     },
     "configurePresets": [
         {
+            "name": "release",
+            "displayName": "Release",
+            "description": "Release build",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release"
+            }
+        },
+        {
             "name": "debug",
             "displayName": "Debug",
             "description": "Debug build with extra debugging symbols",
             "generator": "Ninja",
-            "binaryDir": "${sourceDir}/build/debug",
+            "binaryDir": "${sourceDir}/build",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug"
             }
@@ -21,7 +31,7 @@
             "displayName": "AddressSanitizer",
             "description": "Debug build with AddressSanitizer enabled",
             "generator": "Ninja",
-            "binaryDir": "${sourceDir}/build/asan",
+            "binaryDir": "${sourceDir}/build",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug",
                 "ENABLE_ASAN": "ON"
@@ -29,6 +39,10 @@
         }
     ],
     "buildPresets": [
+        {
+            "name": "release",
+            "configurePreset": "release"
+        },
         {
             "name": "debug",
             "configurePreset": "debug"
@@ -39,6 +53,10 @@
         }
     ],
     "testPresets": [
+        {
+            "name": "release",
+            "configurePreset": "release"
+        },
         {
             "name": "debug",
             "configurePreset": "debug"

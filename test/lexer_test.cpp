@@ -4,7 +4,7 @@
 using namespace toydb::parser;
 
 TEST(LexerTest, KeyWords) {
-    std::string input = "SELECT select from From where WHERE";
+    std::string input = "SELECT select from FROM where WHERE";
     TokenStream ts{input};
 
     ASSERT_TRUE(ts.next().type == TokenType::KeySelect);
@@ -34,14 +34,15 @@ TEST(LexerTest, Peek) {
 }
 
 TEST(LexerTest, Literals) {
-    std::string input = "123 foobar 99.99 true FALSE";
+    std::string input = "123 foobar '99 foo %$^`~ ' true FALSE '' ";
     TokenStream ts{input};
 
     ASSERT_TRUE(ts.next().type == TokenType::IntLiteral);
     ASSERT_TRUE(ts.next().type == TokenType::IdentifierType);
-    ASSERT_TRUE(ts.next().type == TokenType::FloatLiteral);
+    ASSERT_TRUE(ts.next().type == TokenType::StringLiteral);
     ASSERT_TRUE(ts.next().type == TokenType::TrueLiteral);
     ASSERT_TRUE(ts.next().type == TokenType::FalseLiteral);
+    ASSERT_TRUE(ts.next().type == TokenType::StringLiteral);
 
     ASSERT_TRUE(ts.next().type == TokenType::EndOfFile);
 }
@@ -62,4 +63,18 @@ TEST(LexerTest, Chars) {
     ASSERT_TRUE(ts.next().type == TokenType::EndOfStatement);
     ASSERT_TRUE(ts.next().type == TokenType::Unknown);
     ASSERT_TRUE(ts.next().type == TokenType::EndOfFile);
+}
+
+TEST(LexerTest, Operators) {
+    std::string input = "> < = <> != >= <=";
+    TokenStream ts{input};
+
+    ASSERT_TRUE(ts.next().type == TokenType::OpGreaterThan);
+    ASSERT_TRUE(ts.next().type == TokenType::OpLessThan);
+    ASSERT_TRUE(ts.next().type == TokenType::OpEquals);
+    ASSERT_TRUE(ts.next().type == TokenType::OpNotEquals);
+    ASSERT_TRUE(ts.next().type == TokenType::OpNotEquals);
+    
+    ASSERT_TRUE(ts.next().type == TokenType::OpGreaterEq);
+    ASSERT_TRUE(ts.next().type == TokenType::OpLessEq);
 }

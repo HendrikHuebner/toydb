@@ -2,7 +2,6 @@
 
 #include <cassert>
 #include <cctype>
-#include "common/result.hpp"
 #include "parser/lexer.hpp"
 #include "parser/query_ast.hpp"
 
@@ -16,9 +15,7 @@ class Parser {
 
     void expectToken(TokenType expected, const std::string& context);
 
-    void expectIdentifier();
-
-    Token parseIdentifier();
+    Token parseIdentifier(const std::string& context);
 
     std::unique_ptr<ast::Expression> parseExpression();
 
@@ -39,7 +36,7 @@ class Parser {
 public:
     Parser(std::string_view query) noexcept : ts(query) {}   
 
-    Result<std::unique_ptr<ast::QueryAST>, std::string> parseQuery() noexcept;
+    std::expected<std::unique_ptr<ast::QueryAST>, std::string> parseQuery() noexcept;
 };
 
 } // end namespace parser

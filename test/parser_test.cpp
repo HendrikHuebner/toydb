@@ -14,23 +14,31 @@ protected:
     void testSuccessfulParse(const std::string& query) {
         Parser parser(query);
         auto result = parser.parseQuery();
-        ASSERT_TRUE(result.ok()) << "Failed to parse query: " << query << ", error: " << result.getError();
+        ASSERT_TRUE(result.has_value()) << "Failed to parse query: " << query << ", error: " << result.error();
     }
 
     void testFailedParse(const std::string& query, const std::string& expectedErrorSubstr = "") {
         Parser parser(query);
         auto result = parser.parseQuery();
-        ASSERT_TRUE(result.isError()) << "Query should have failed to parse: " << query;
+        ASSERT_TRUE(!result.has_value()) << "Query should have failed to parse: " << query;
         if (!expectedErrorSubstr.empty()) {
-            ASSERT_NE(result.getError().find(expectedErrorSubstr), std::string::npos)
-                << "Error message should contain '" << expectedErrorSubstr << "' but was: " << result.getError();
+            ASSERT_NE(result.error().find(expectedErrorSubstr), std::string::npos)
+                << "Error message should contain '" << expectedErrorSubstr << "' but was: " << result.error();
         }
     }
 };
 
 // INSERT tests
+TEST_F(ParserTest, Insert) {
+    testSuccessfulParse("INSERT INTO booleans (id) VALUES (False);");
+}
+
 TEST_F(ParserTest, InsertWithColumns) {
-    testSuccessfulParse("INSERT INTO users (id, name, age) VALUES (1, 'John', 30)");
+    testSuccessfulParse("INSERT INTO users (id, name, age, is_male) VALUES (1, 'John', 0, True)");
+}
+
+TEST_F(ParserTest, InsertWithSemicolon) {
+    testSuccessfulParse("INSERT INTO users (id, name) VALUES (99, 'David');");
 }
 
 TEST_F(ParserTest, InsertWithoutColumns) {
@@ -38,7 +46,7 @@ TEST_F(ParserTest, InsertWithoutColumns) {
 }
 
 TEST_F(ParserTest, InsertMultipleRows) {
-    testSuccessfulParse("INSERT INTO users (id, name) VALUES (1, 'John'), (2, 'Jane')");
+    testSuccessfulParse("INSERT INTO users (id, name) VALUES (1, 'John Doe'), (2, 'Jane')");
 }
 
 TEST_F(ParserTest, InsertMissingTable) {
@@ -49,9 +57,38 @@ TEST_F(ParserTest, InsertMissingValues) {
     testFailedParse("INSERT INTO users (id, name)", "Expected VALUES");
 }
 
+TEST_F(ParserTest, InsertMissingValues2) {
+    testFailedParse("INSERT INTO users (id, name) VALUES", "Expected value list");
+}
+
+TEST_F(ParserTest, InsertMissingValues3) {
+    testFailedParse("INSERT INTO users (id, name) VALUES (123)", 
+        "Number of entries in tuple does not match column list");
+}
+
+TEST_F(ParserTest, InsertTooManyValues) {
+    testFailedParse("INSERT INTO users (id, name) VALUES (1, 'Bob', True)", 
+        "Number of entries in tuple does not match column list");
+}
 // UPDATE tests
 TEST_F(ParserTest, UpdateWithWhere) {
     testSuccessfulParse("UPDATE users SET name = 'John', age = 30 WHERE id = 1");
+}
+
+TEST_F(ParserTest, UpdateWithWhere2) {
+    testSuccessfulParse("UPDATE users SET name = 'John', age = 30 WHERE id = 1 AND age = 12");
+}
+
+TEST_F(ParserTest, UpdateWithWhere3) {
+    testSuccessfulParse("UPDATE users SET name = 'John', age = 30 WHERE id = 1 OR name = 'Bob'");
+}
+
+TEST_F(ParserTest, UpdateWithWhere4) {
+    testSuccessfulParse("UPDATE users SET name = 'John', age = 30 WHERE id <= 1 OR (id = 2 OR id = 3) OR (id > 4)");
+}
+
+TEST_F(ParserTest, UpdateWithWhere5) {
+    testSuccessfulParse("UPDATE users SET name = 'John', age = 30 WHERE (id != 1 OR id <= 5) AND (age > 23)");
 }
 
 TEST_F(ParserTest, UpdateWithoutWhere) {
@@ -63,7 +100,7 @@ TEST_F(ParserTest, UpdateMissingTable) {
 }
 
 TEST_F(ParserTest, UpdateMissingSet) {
-    testFailedParse("UPDATE users name = 'John'", "Expected SET");
+    testFailedParse("UPDATE users name = 'John'", "Expected SET statement");
 }
 
 // DELETE tests
@@ -97,7 +134,7 @@ TEST_F(ParserTest, CreateTableMissingName) {
 }
 
 TEST_F(ParserTest, CreateTableMissingColumns) {
-    testFailedParse("CREATE TABLE users", "Expected (");
+    testFailedParse("CREATE TABLE users", "Expected column definition list");
 }
 
 TEST_F(ParserTest, CreateTableInvalidDataType) {

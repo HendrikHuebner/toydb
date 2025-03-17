@@ -26,8 +26,8 @@ static void constexpr printAssertFailed(std::string_view condition, std::string_
 
 } // namespace toydb
 
-#define debug_assert(cond, msg, ...)                                                          \
-    if (!(cond)) {                                                                            \
+#define debug_assert(cond, msg, ...)                                                            \
+    if (!(cond)) {                                                                              \
         toydb::printAssertFailed(#cond, (msg), std::source_location::current(), ##__VA_ARGS__); \
     }
 

@@ -5,7 +5,7 @@
 #include <cstddef>
 #include <optional>
 #include <string>
-#include "common/result.hpp"
+#include <expected>
 
 namespace toydb {
 
@@ -14,7 +14,6 @@ namespace parser {
 enum class TokenType {
     IdentifierType,
     IntLiteral,
-    FloatLiteral,
     TrueLiteral,
     FalseLiteral,
     StringLiteral,
@@ -28,6 +27,8 @@ enum class TokenType {
     OpLessEq,
     OpEquals,
     OpNotEquals,
+    OpAnd,
+    OpOr,
 
     KeyInsert,
     KeyInto,
@@ -47,10 +48,10 @@ enum class TokenType {
 
     KeyBoolType,
     KeyIntType,
-    KeyFloatType,
     KeyCharType,
 
     Asterisk,
+    Quote,
     ParenthesisL,
     ParenthesisR,
     Comma,
@@ -58,14 +59,14 @@ enum class TokenType {
     Unknown
 };
 
-
 struct Token {
 
     TokenType type;
-    std::string_view lexeme;
+    std::string lexeme;
 
     Token(TokenType type = TokenType::Unknown) : type(type), lexeme("") {}
-    Token(TokenType type, std::string_view lexeme) : type(type), lexeme(lexeme) {}
+    Token(TokenType type, const std::string& lexeme) : type(type), lexeme(lexeme) {}
+    Token(TokenType type, std::string&& lexeme) : type(type), lexeme(std::move(lexeme)) {}
 
     std::string toString() const noexcept;
 };
@@ -118,10 +119,11 @@ class TokenStream {
     size_t getLinePosition() const noexcept { return position - lineStart - 1; }
 
    private:
-    Result<char> moveToNextToken() noexcept;
+    std::optional<char> moveToNextToken() noexcept;
 
     Token lexOperator() noexcept;
     Token lexWord() noexcept;
+    Token lexString() noexcept;
     Token lexNumber() noexcept;
     Token lexPunctuationChar() noexcept;
 };

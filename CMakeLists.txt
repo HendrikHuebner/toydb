@@ -1,16 +1,11 @@
 cmake_minimum_required(VERSION 3.20)
-project(ToyDB LANGUAGES CXX)
+project(toydb LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(ENABLE_ASAN "Enable AddressSanitizer" OFF)
-
-if (ENABLE_ASAN)
-    target_compile_options(toydb PRIVATE -fsanitize=address -fno-omit-frame-pointer)
-    target_link_libraries(toydb PRIVATE -fsanitize=address)
-endif()
 
 include(FetchContent)
 FetchContent_Declare(
@@ -25,6 +20,12 @@ file(GLOB_RECURSE DB_SOURCES src/*.cpp)
 file(GLOB_RECURSE DB_HEADERS include/*.hpp)
 
 add_library(toydb SHARED ${DB_SOURCES} ${DB_HEADERS})
+
+if (ENABLE_ASAN)
+    target_compile_options(toydb PRIVATE -fsanitize=address -fno-omit-frame-pointer)
+    target_link_libraries(toydb PRIVATE -fsanitize=address)
+endif()
+
 target_include_directories(toydb PUBLIC ./include)
 target_link_libraries(toydb PRIVATE spdlog)
 

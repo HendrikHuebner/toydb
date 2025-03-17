@@ -1,5 +1,7 @@
 #include "parser/parser.hpp"
+#include <limits>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <vector>
 #include <stdexcept>
@@ -7,6 +9,7 @@
 #include "common/logging.hpp"
 #include "parser/lexer.hpp"
 #include "parser/query_ast.hpp"
+#include "common/debug.hpp"
 
 namespace toydb {
 namespace parser {
@@ -21,10 +24,10 @@ public:
  * Parses an identifier token and returns it.
  * @throws ParserException if next token is not an identifier
  */
-Token Parser::parseIdentifier() {
+Token Parser::parseIdentifier(const std::string& context) {
     auto token = ts.next();
     if (token.type != TokenType::IdentifierType) {
-        throw ParserException("Expected identifier, but got " + token.toString(),
+        throw ParserException("Expected " + context + ", but got " + token.toString(),
                             ts.getCurrentLineNumber(), ts.getLinePosition());
     }
     return token;
@@ -39,11 +42,26 @@ Token Parser::parseIdentifier() {
 void Parser::expectToken(TokenType expected, const std::string& context) {
     auto token = ts.peek();
     if (token.type != expected) {
-        throw ParserException("Expected " + std::string(token.toString()) + ", but got " + 
-                            token.toString() + " in " + context,
+        throw ParserException("Expected " + context + ", but got " + 
+                            token.toString(),
                             ts.getCurrentLineNumber(), ts.getLinePosition());
     }
     ts.next();
+}
+
+
+int getPrecedence(TokenType type) {
+    switch (type) {
+        case TokenType::OpEquals:
+        case TokenType::OpNotEquals:
+        case TokenType::OpGreaterEq:
+        case TokenType::OpGreaterThan:
+        case TokenType::OpLessThan:
+        case TokenType::OpLessEq: return 3;
+        case TokenType::OpAnd: return 2;
+        case TokenType::OpOr: return 1;
+        default: return 0; // not a binop
+    }
 }
 
 /**
@@ -52,16 +70,15 @@ void Parser::expectToken(TokenType expected, const std::string& context) {
  */
 std::unique_ptr<ast::Expression> Parser::parseExpression() {
     auto left = parseTerm();
-    auto token = ts.peek();
+    Token token = ts.peek();
 
-    while (token.type == TokenType::OpEquals || token.type == TokenType::OpNotEquals ||
-           token.type == TokenType::OpGreaterThan || token.type == TokenType::OpLessThan ||
-           token.type == TokenType::OpGreaterEq || token.type == TokenType::OpLessEq) {
+    int prevPrecedence = std::numeric_limits<int>::max();
+    int precedence = getPrecedence(token.type);
+
+    while (precedence > 0) {
         ts.next();
         auto right = parseTerm();
         auto condition = std::make_unique<ast::Condition>();
-        condition->left = std::move(left);
-        condition->right = std::move(right);
 
         switch (token.type) {
             case TokenType::OpEquals: condition->op = ast::Operator::EQUAL; break;
@@ -70,11 +87,28 @@ std::unique_ptr<ast::Expression> Parser::parseExpression() {
             case TokenType::OpLessThan: condition->op = ast::Operator::LESS; break;
             case TokenType::OpGreaterEq: condition->op = ast::Operator::GREATER_EQUAL; break;
             case TokenType::OpLessEq: condition->op = ast::Operator::LESS_EQUAL; break;
+            case TokenType::OpAnd: condition->op = ast::Operator::AND; break;
+            case TokenType::OpOr: condition->op = ast::Operator::OR; break;
             default: break;
         }
 
-        left = std::move(condition);
+        condition->right = std::move(right);
+
+        if (precedence <= prevPrecedence) {
+            condition->left = std::move(left);
+            left = std::move(condition);
+
+        } else {
+            auto leftCondition = dynamic_cast<ast::Condition*>(left.get());
+            debug_assert(leftCondition, "Left should be binop");
+
+            condition->left = std::move(leftCondition->right);
+            leftCondition->right = std::move(condition); 
+        }
+
         token = ts.peek();
+        prevPrecedence = precedence;
+        precedence = getPrecedence(token.type);
     }
 
     return left;
@@ -84,16 +118,21 @@ std::unique_ptr<ast::Expression> Parser::parseExpression() {
  * Parses a term (identifier or literal) and returns its AST representation.
  */
 std::unique_ptr<ast::Expression> Parser::parseTerm() {
-    auto token = ts.peek();
+    auto token = ts.next();
 
     if (token.type == TokenType::IdentifierType) {
-        return std::make_unique<ast::Literal>(std::string(token.lexeme));
+        return std::make_unique<ast::Literal>(token.lexeme);
 
-    } else if (token.type == TokenType::IntLiteral || token.type == TokenType::FloatLiteral ||
+    } else if (token.type == TokenType::IntLiteral ||
                token.type == TokenType::StringLiteral) {
-        ts.next();
-        return std::make_unique<ast::Literal>(std::string(token.lexeme));
+        return std::make_unique<ast::Literal>(token.lexeme);
+
+    } else if (token.type == TokenType::ParenthesisL) {
+        auto&& result = parseExpression();
+        expectToken(TokenType::ParenthesisR, "closing parenthesis");
+        return result;
     }
+
     throw ParserException("Expected term but got " + token.toString(),
                         ts.getCurrentLineNumber(), ts.getLinePosition());
 }
@@ -104,9 +143,11 @@ std::unique_ptr<ast::Expression> Parser::parseTerm() {
  */
 std::unique_ptr<ast::Expression> Parser::parseWhere() {
     auto token = ts.peek();
+
     if (token.type != TokenType::KeyWhere) {
         return nullptr;
     }
+
     ts.next();
     auto expr = parseExpression();
     if (!expr) {
@@ -118,7 +159,6 @@ std::unique_ptr<ast::Expression> Parser::parseWhere() {
 
 ast::DataType parseDataType(Token token, size_t line, size_t pos) {
     if (token.type == TokenType::KeyIntType) return ast::DataType::INT;
-    if (token.type == TokenType::KeyFloatType) return ast::DataType::FLOAT;
     if (token.type == TokenType::KeyCharType) return ast::DataType::STRING;
     if (token.type == TokenType::KeyBoolType) return ast::DataType::BOOL;
     throw ParserException("Unknown data type: " + token.toString(), line, pos);
@@ -127,22 +167,22 @@ ast::DataType parseDataType(Token token, size_t line, size_t pos) {
 std::unique_ptr<ast::CreateTable> Parser::parseCreateTable() {
     getLogger().trace("Parsing CREATE TABLE statement");
 
-    expectToken(TokenType::KeyCreate, "CREATE TABLE statement");
-    expectToken(TokenType::KeyTable, "CREATE TABLE statement");
+    expectToken(TokenType::KeyCreate, "CREATE statement");
+    expectToken(TokenType::KeyTable, "TABLE statement");
 
-    auto token = parseIdentifier();
+    auto token = parseIdentifier("table name");
     auto tableName = token.lexeme;
-    auto createTable = std::make_unique<ast::CreateTable>(std::string(tableName));
+    auto createTable = std::make_unique<ast::CreateTable>(tableName);
 
     expectToken(TokenType::ParenthesisL, "column definition list");
 
     while (ts.peek().type != TokenType::ParenthesisR) {
-        token = parseIdentifier();
-        std::string_view colName = token.lexeme;
+        token = parseIdentifier("column name");
+        std::string colName = token.lexeme;
         
         token = ts.next();
         auto colType = parseDataType(token, ts.getCurrentLineNumber(), ts.getLinePosition());
-        createTable->columns.emplace_back(std::string(colName), colType);
+        createTable->columns.emplace_back(colName, colType);
 
         if (ts.peek().type == TokenType::Comma) {
             ts.next();
@@ -167,10 +207,11 @@ std::unique_ptr<ast::Insert> Parser::parseInsertInto() {
     expectToken(TokenType::KeyInsert, "INSERT statement");
     expectToken(TokenType::KeyInto, "INTO statement");
 
-    auto token = parseIdentifier();
+    auto token = parseIdentifier("table name");
     auto tableName = token.lexeme;
-    auto insert = std::make_unique<ast::Insert>(std::string(tableName));
+    auto insert = std::make_unique<ast::Insert>(tableName);
 
+    // column list
     if (ts.peek().type == TokenType::ParenthesisL) {
         ts.next();
 
@@ -181,14 +222,15 @@ std::unique_ptr<ast::Insert> Parser::parseInsertInto() {
             }
             first = false;
             
-            token = parseIdentifier();
-            insert->columnNames.push_back(std::string(token.lexeme));
+            token = parseIdentifier("column name");
+            insert->columnNames.push_back(token.lexeme);
         }
         expectToken(TokenType::ParenthesisR, "column list");
     }
 
-    expectToken(TokenType::KeyValues, "INSERT statement");
+    expectToken(TokenType::KeyValues, "VALUES statement");
 
+    // value tuples
     bool firstRow = true;
     while (true) {
         if (!firstRow) {
@@ -214,9 +256,15 @@ std::unique_ptr<ast::Insert> Parser::parseInsertInto() {
             row.push_back(std::move(expr));
         }
 
+        if (insert->columnNames.size() != row.size()) {
+            throw ParserException("Number of entries in tuple does not match column list", 
+                ts.getCurrentLineNumber(), ts.getLinePosition());
+        }
+
         expectToken(TokenType::ParenthesisR, "value list");
         insert->values.push_back(std::move(row));
     }
+
 
     return insert;
 }
@@ -237,9 +285,9 @@ std::unique_ptr<ast::Update> Parser::parseUpdate() {
     }
 
     auto tableName = token.lexeme;
-    auto update = std::make_unique<ast::Update>(std::string(tableName));
+    auto update = std::make_unique<ast::Update>(tableName);
 
-    expectToken(TokenType::KeySet, "UPDATE statement");
+    expectToken(TokenType::KeySet, "SET statement");
 
     bool first = true;
     while (true) {
@@ -252,14 +300,14 @@ std::unique_ptr<ast::Update> Parser::parseUpdate() {
 
         first = false;
         
-        token = parseIdentifier();
+        token = parseIdentifier("column name");
         auto colName = token.lexeme;
         
         expectToken(TokenType::OpEquals, "assignment in UPDATE statement");
         
         auto value = parseTerm();
         debug_assert(value != nullptr, "Expected expression after = in UPDATE statement");
-        update->assignments.emplace_back(std::string(colName), std::move(value));
+        update->assignments.emplace_back(colName, std::move(value));
     }
 
     update->where = parseWhere();
@@ -276,9 +324,9 @@ std::unique_ptr<ast::Delete> Parser::parseDeleteFrom() {
     expectToken(TokenType::KeyDelete, "DELETE statement");
     expectToken(TokenType::KeyFrom, "FROM statement");
 
-    auto token = parseIdentifier();
+    auto token = parseIdentifier("table name");
     auto tableName = token.lexeme;
-    auto deleteFrom = std::make_unique<ast::Delete>(std::string(tableName));
+    auto deleteFrom = std::make_unique<ast::Delete>(tableName);
 
     deleteFrom->where = parseWhere();
     
@@ -290,7 +338,7 @@ std::unique_ptr<ast::Delete> Parser::parseDeleteFrom() {
  * @param query The query string to parse.
  * @return A unique_ptr to the parsed query AST.
  */
-Result<std::unique_ptr<ast::QueryAST>, std::string> Parser::parseQuery() noexcept {
+std::expected<std::unique_ptr<ast::QueryAST>, std::string> Parser::parseQuery() noexcept {
     auto token = ts.peek();
     ast::ASTNode* query{};
 
@@ -309,11 +357,11 @@ Result<std::unique_ptr<ast::QueryAST>, std::string> Parser::parseQuery() noexcep
                 query = parseCreateTable().release();
                 break;
             default:
-                return Error("Unsupported query type: " + token.toString());
+                return std::unexpected("Unsupported query type: " + token.toString());
         }
     } catch (const ParserException& e) {
         getLogger().info("Query parsing failed: {}", e.what());
-        return Error(e.what());
+        return std::unexpected(e.what());
     }
 
     if (ts.peek().type == TokenType::EndOfStatement) {
@@ -323,9 +371,11 @@ Result<std::unique_ptr<ast::QueryAST>, std::string> Parser::parseQuery() noexcep
     expectToken(TokenType::EndOfFile, "end of query");
 
     debug_assert(query != nullptr, "Query AST should not be null");
-    getLogger().trace("Successfully parsed query");
+    std::stringstream ss;
+    ss << *query;
+    getLogger().debug("Successfully parsed query: {}", ss.str());
 
-    return Success(std::make_unique<ast::QueryAST>(query));
+    return std::make_unique<ast::QueryAST>(query);
 }
 
 } // namespace parser

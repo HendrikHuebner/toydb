@@ -11,7 +11,7 @@ namespace ast {
 
 enum class Operator { EQUAL, NOT_EQUAL, GREATER, LESS, GREATER_EQUAL, LESS_EQUAL, AND, OR, NOT };
 
-enum class DataType { INT, FLOAT, STRING, BOOL };
+enum class DataType { INT, STRING, BOOL };
 
 class ASTNode {
 public:
