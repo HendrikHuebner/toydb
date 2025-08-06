@@ -256,7 +256,7 @@ std::unique_ptr<ast::Insert> Parser::parseInsertInto() {
             row.push_back(std::move(expr));
         }
 
-        if (insert->columnNames.size() != row.size()) {
+        if (insert->columnNames.size() > 0 && insert->columnNames.size() != row.size()) {
             throw ParserException("Number of entries in tuple does not match column list", 
                 ts.getCurrentLineNumber(), ts.getLinePosition());
         }

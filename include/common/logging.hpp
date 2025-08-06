@@ -31,4 +31,37 @@ inline logger_t& getLogger() {
     return logger;
 }
 
+namespace Logger {
+
+    template <typename... Args>
+    inline void trace(Args&&... args) {
+        getLogger().trace(std::forward<Args>(args)...);
+    }
+
+    template <typename... Args>
+    inline void debug(Args&&... args) {
+        getLogger().debug(std::forward<Args>(args)...);
+    }
+
+    template <typename... Args>
+    inline void info(Args&&... args) {
+        getLogger().info(std::forward<Args>(args)...);
+    }
+
+        template <typename... Args>
+    inline void warn(Args&&... args) {
+        getLogger().warn(std::forward<Args>(args)...);
+    }
+
+        template <typename... Args>
+    inline void error(Args&&... args) {
+        getLogger().error(std::forward<Args>(args)...);
+    }
+
+        template <typename... Args>
+    inline void critical(Args&&... args) {
+        getLogger().critical(std::forward<Args>(args)...);
+    }
+}
+
 } // namespace toydb

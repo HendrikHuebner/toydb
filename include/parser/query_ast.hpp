@@ -4,14 +4,11 @@
 #include <vector>
 #include <memory>
 #include <iostream>
+#include "common/types.hpp"
 
 namespace toydb {
 
 namespace ast {
-
-enum class Operator { EQUAL, NOT_EQUAL, GREATER, LESS, GREATER_EQUAL, LESS_EQUAL, AND, OR, NOT };
-
-enum class DataType { INT, STRING, BOOL };
 
 class ASTNode {
 public:
@@ -99,9 +96,9 @@ struct TableExpression : public ASTNode {
 
 struct ColumnDefinition : public ASTNode {
     std::string name;
-    DataType type;
+    Type type;
 
-    ColumnDefinition(const std::string& name, DataType type) noexcept 
+    ColumnDefinition(const std::string& name, Type type) noexcept 
         : name(name), type(std::move(type)) {}
 
     std::ostream& print(std::ostream&) const noexcept override;
