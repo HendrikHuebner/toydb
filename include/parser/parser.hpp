@@ -34,11 +34,10 @@ class Parser {
     std::unique_ptr<ast::CreateTable> parseCreateTable();
 
 public:
-    Parser(std::string_view query) noexcept : ts(query) {}   
+    Parser(std::string_view query) noexcept : ts(query) {}
 
-    std::expected<std::unique_ptr<ast::QueryAST>, std::string> parseQuery() noexcept;
+    std::expected<std::unique_ptr<ast::QueryAST>, std::string> parseQuery();
 };
 
 } // end namespace parser
-
 } // end namespace toydb

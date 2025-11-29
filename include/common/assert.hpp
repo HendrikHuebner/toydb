@@ -1,34 +1,40 @@
 #pragma once
 
 #ifdef NDEBUG
-#define ASSERT(...)
+#define tdb_assert(...)
+#define tdb_unreachable(...) __builtin__unreachable()
 #else
 
-#include <iostream>
+#include <format>
 #include <source_location>
+#include <string_view>
 
 namespace toydb {
 
-template <typename... Args>
-static void constexpr printAssertFailed(std::string_view condition, std::string_view message,
-                              const std::source_location& source_location, Args&&... args) {
-    
-    auto&& formatted_message = std::vformat(message, std::make_format_args(args...));
+void logAssertionFailed(std::string_view, const std::source_location&,
+                                         std::string msg) noexcept;
 
-    std::cerr << std::format("Assertion '{}' in {} at {}:{} failed!\n Message: {}", 
-                            condition,
-                            source_location.file_name(), 
-                            source_location.function_name(),
-                            source_location.line(), 
-                            formatted_message)
-              << std::endl;
+template <typename... Args>
+static void printAssertFailed(std::string_view condition, std::string_view message,
+                                        const std::source_location& source_location,
+                                        Args&&... args) noexcept {
+
+    std::string formatted_message = std::vformat(message, std::make_format_args(args...));
+    logAssertionFailed(condition, source_location, formatted_message);
+    abort();
 }
 
-} // namespace toydb
+}  // namespace toydb
 
-#define debug_assert(cond, msg, ...)                                                            \
+#define tdb_assert(cond, msg, ...)                                                              \
     if (!(cond)) {                                                                              \
         toydb::printAssertFailed(#cond, (msg), std::source_location::current(), ##__VA_ARGS__); \
     }
+
+#define tdb_unreachable(msg)                                                           \
+    do {                                                                               \
+        toydb::printAssertFailed("unreachable", msg, std::source_location::current()); \
+        __builtin_unreachable();                                                       \
+    } while (0)
 
 #endif

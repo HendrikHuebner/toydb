@@ -1,9 +1,9 @@
 #pragma once
 
+#include <iostream>
+#include <memory>
 #include <string>
 #include <vector>
-#include <memory>
-#include <iostream>
 #include "common/types.hpp"
 
 namespace toydb {
@@ -11,7 +11,7 @@ namespace toydb {
 namespace ast {
 
 class ASTNode {
-public:
+   public:
     virtual ~ASTNode() = default;
     virtual std::ostream& print(std::ostream&) const noexcept = 0;
     friend std::ostream& operator<<(std::ostream&, const ASTNode&);
@@ -19,18 +19,19 @@ public:
 
 struct QueryAST {
     explicit QueryAST(ASTNode* query) : query_(query) {}
+
     std::unique_ptr<ASTNode> query_;
     friend std::ostream& operator<<(std::ostream& os, const QueryAST&);
 };
-
 
 struct Column : public ASTNode {
     std::string name;
     std::string alias;
 
     Column(const std::string& name) noexcept : name(name) {}
+
     Column(const std::string& name, const std::string& alias) noexcept : name(name), alias(alias) {}
-    
+
     std::ostream& print(std::ostream&) const noexcept override;
 };
 
@@ -39,45 +40,53 @@ struct Table : public ASTNode {
     std::string alias;
 
     Table(const std::string& name) noexcept : name(name) {}
+
     Table(const std::string& name, const std::string& alias) noexcept : name(name), alias(alias) {}
 
     std::ostream& print(std::ostream&) const noexcept override;
 };
-
 
 struct Expression : public ASTNode {};
 
 struct Literal : public Expression {
     std::string value;
 
-    Literal(const std::string& value) noexcept : value(value) {}    
+    Literal(const std::string& value) noexcept : value(value) {}
 
     std::ostream& print(std::ostream&) const noexcept override;
 };
 
 struct Condition : public Expression {
-    Operator op;
+    CmpOp op;
     std::unique_ptr<Expression> left, right;
- 
-    bool isUnop() const {
-        return right == nullptr;
-    }
+
+    bool isUnop() const { return right == nullptr; }
 
     std::ostream& print(std::ostream&) const noexcept override;
 
-private:
-    static std::string getOperatorString(Operator op) noexcept {
+   private:
+    static std::string getOperatorString(CmpOp op) noexcept {
         switch (op) {
-            case Operator::EQUAL: return "=";
-            case Operator::NOT_EQUAL: return "!=";
-            case Operator::GREATER: return ">";
-            case Operator::LESS: return "<";
-            case Operator::GREATER_EQUAL: return ">=";
-            case Operator::LESS_EQUAL: return "<=";
-            case Operator::AND: return "AND";
-            case Operator::OR: return "OR";
-            case Operator::NOT: return "NOT";
-            default: return "";
+            case CmpOp::EQUAL:
+                return "=";
+            case CmpOp::NOT_EQUAL:
+                return "!=";
+            case CmpOp::GREATER:
+                return ">";
+            case CmpOp::LESS:
+                return "<";
+            case CmpOp::GREATER_EQUAL:
+                return ">=";
+            case CmpOp::LESS_EQUAL:
+                return "<=";
+            case CmpOp::AND:
+                return "AND";
+            case CmpOp::OR:
+                return "OR";
+            case CmpOp::NOT:
+                return "NOT";
+            default:
+                return "";
         }
     }
 };
@@ -88,17 +97,18 @@ struct TableExpression : public ASTNode {
     std::unique_ptr<Expression> condition;
 
     TableExpression(const Table& table) noexcept : table(table) {}
-    TableExpression(const Table& table, std::unique_ptr<TableExpression> join) noexcept : table(table), join(std::move(join)) {}
+
+    TableExpression(const Table& table, std::unique_ptr<TableExpression> join) noexcept
+        : table(table), join(std::move(join)) {}
 
     std::ostream& print(std::ostream&) const noexcept override;
 };
 
-
 struct ColumnDefinition : public ASTNode {
     std::string name;
-    Type type;
+    DataType type;
 
-    ColumnDefinition(const std::string& name, Type type) noexcept 
+    ColumnDefinition(const std::string& name, DataType type) noexcept
         : name(name), type(std::move(type)) {}
 
     std::ostream& print(std::ostream&) const noexcept override;
@@ -156,5 +166,5 @@ std::ostream& operator<<(std::ostream& os, const ASTNode& node);
 
 std::ostream& operator<<(std::ostream& os, const QueryAST& ast);
 
-} // namespace ast
-} // namespace toydb
+}  // namespace ast
+}  // namespace toydb

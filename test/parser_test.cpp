@@ -1,20 +1,22 @@
+#include "parser/parser.hpp"
 #include <gtest/gtest.h>
 #include <string>
-#include "parser/parser.hpp"
 
 using namespace toydb;
 using namespace toydb::parser;
 using namespace toydb::ast;
 
 class ParserTest : public ::testing::Test {
-protected:
+   protected:
     void SetUp() override {}
+
     void TearDown() override {}
 
     void testSuccessfulParse(const std::string& query) {
         Parser parser(query);
         auto result = parser.parseQuery();
-        ASSERT_TRUE(result.has_value()) << "Failed to parse query: " << query << ", error: " << result.error();
+        ASSERT_TRUE(result.has_value())
+            << "Failed to parse query: " << query << ", error: " << result.error();
     }
 
     void testFailedParse(const std::string& query, const std::string& expectedErrorSubstr = "") {
@@ -23,7 +25,8 @@ protected:
         ASSERT_TRUE(!result.has_value()) << "Query should have failed to parse: " << query;
         if (!expectedErrorSubstr.empty()) {
             ASSERT_NE(result.error().find(expectedErrorSubstr), std::string::npos)
-                << "Error message should contain '" << expectedErrorSubstr << "' but was: " << result.error();
+                << "Error message should contain '" << expectedErrorSubstr
+                << "' but was: " << result.error();
         }
     }
 };
@@ -62,14 +65,15 @@ TEST_F(ParserTest, InsertMissingValues2) {
 }
 
 TEST_F(ParserTest, InsertMissingValues3) {
-    testFailedParse("INSERT INTO users (id, name) VALUES (123)", 
-        "Number of entries in tuple does not match column list");
+    testFailedParse("INSERT INTO users (id, name) VALUES (123)",
+                    "Number of entries in tuple does not match column list");
 }
 
 TEST_F(ParserTest, InsertTooManyValues) {
-    testFailedParse("INSERT INTO users (id, name) VALUES (1, 'Bob', True)", 
-        "Number of entries in tuple does not match column list");
+    testFailedParse("INSERT INTO users (id, name) VALUES (1, 'Bob', True)",
+                    "Number of entries in tuple does not match column list");
 }
+
 // UPDATE tests
 TEST_F(ParserTest, UpdateWithWhere) {
     testSuccessfulParse("UPDATE users SET name = 'John', age = 30 WHERE id = 1");
@@ -84,11 +88,13 @@ TEST_F(ParserTest, UpdateWithWhere3) {
 }
 
 TEST_F(ParserTest, UpdateWithWhere4) {
-    testSuccessfulParse("UPDATE users SET name = 'John', age = 30 WHERE id <= 1 OR (id = 2 OR id = 3) OR (id > 4)");
+    testSuccessfulParse(
+        "UPDATE users SET name = 'John', age = 30 WHERE id <= 1 OR (id = 2 OR id = 3) OR (id > 4)");
 }
 
 TEST_F(ParserTest, UpdateWithWhere5) {
-    testSuccessfulParse("UPDATE users SET name = 'John', age = 30 WHERE (id != 1 OR id <= 5) AND (age > 23)");
+    testSuccessfulParse(
+        "UPDATE users SET name = 'John', age = 30 WHERE (id != 1 OR id <= 5) AND (age > 23)");
 }
 
 TEST_F(ParserTest, UpdateWithoutWhere) {

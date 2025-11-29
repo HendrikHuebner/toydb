@@ -11,11 +11,11 @@ struct invalid_query : public std::runtime_error {
 };
 
 class ConditionBuilder {
-    
+
     ast::Condition* condition;
 
     public:
-    ConditionBuilder& isGreater(ast::Expression& left, ast::Expression& right) {
+    ConditionBuilder& isGreater([[maybe_unused]] ast::Expression& left, [[maybe_unused]] ast::Expression& right) {
         return *this;
     }
 

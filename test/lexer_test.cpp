@@ -27,7 +27,7 @@ TEST(LexerTest, Peek) {
 
     ASSERT_TRUE(ts.peek().type == TokenType::KeyFrom);
     ASSERT_TRUE(ts.next().type == TokenType::KeyFrom);
-    
+
     ASSERT_TRUE(ts.empty());
     ASSERT_TRUE(ts.next().type == TokenType::EndOfFile);
     ASSERT_TRUE(ts.empty());
@@ -57,7 +57,7 @@ TEST(LexerTest, Chars) {
     ASSERT_TRUE(ts.next().type == TokenType::Comma);
     ASSERT_TRUE(ts.next().type == TokenType::IntLiteral);
     ASSERT_TRUE(ts.next().type == TokenType::ParenthesisR);
-    
+
     ASSERT_TRUE(ts.next().type == TokenType::Asterisk);
     ASSERT_TRUE(ts.next().type == TokenType::IdentifierType);
     ASSERT_TRUE(ts.next().type == TokenType::EndOfStatement);
@@ -74,7 +74,7 @@ TEST(LexerTest, Operators) {
     ASSERT_TRUE(ts.next().type == TokenType::OpEquals);
     ASSERT_TRUE(ts.next().type == TokenType::OpNotEquals);
     ASSERT_TRUE(ts.next().type == TokenType::OpNotEquals);
-    
+
     ASSERT_TRUE(ts.next().type == TokenType::OpGreaterEq);
     ASSERT_TRUE(ts.next().type == TokenType::OpLessEq);
 }

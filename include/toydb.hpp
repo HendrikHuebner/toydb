@@ -1,5 +1,4 @@
-#ifndef TOYDB_HPP
-#define TOYDB_HPP
+#pragma once
 
 #include <string>
 #include <vector>
@@ -22,5 +21,3 @@ private:
 
     std::vector<Record> records;
 };
-
-#endif // TOYDB_HPP

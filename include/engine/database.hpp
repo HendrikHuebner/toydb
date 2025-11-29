@@ -5,8 +5,8 @@
 #include <filesystem>
 #include <optional>
 #include "table.hpp"
-#include "common/logger.hpp"
-#include "common/memory.hpp"
+#include "common/logging.hpp"
+#include "engine/memory.hpp"
 
 namespace toydb {
 
@@ -22,19 +22,15 @@ class TableManager {
     const MemoryManager& memoryManager;
 
     public:
-    
-    TableManager(path_t& basePath, const MemoryManager& memoryManager) noexcept : basePath(basePath), memoryManager(memoryManager) {
+
+    TableManager(path_t& basePath, const MemoryManager& memoryManager) noexcept
+            : basePath(basePath), memoryManager(memoryManager) {
         init();
     }
 
     void init() noexcept {
         auto paths = discoverTables(basePath);
         tables.reserve(paths.size());
-
-        for (auto& path : paths) {
-            auto* dataPtr = memoryManager.mapNewFile(path, );
-            Table& table = tables.emplace_back(path);
-        }
     }
 
     static std::vector<path_t> discoverTables(const path_t& basePath) noexcept {

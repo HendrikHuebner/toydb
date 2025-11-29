@@ -10,7 +10,7 @@ static std::mutex cout_mutex;
 
 struct Trace {
     Trace() {
-        std::lock_guard<std::mutex> lock(cout_mutex); 
+        std::lock_guard<std::mutex> lock(cout_mutex);
         std::cout << std::setw(2 * depth) << "";
         ++depth;
     }
@@ -29,6 +29,6 @@ struct Trace {
     {                                                                \
         toydb::debug::Trace trace_obj;                               \
         std::lock_guard<std::mutex> lock(toydb::debug::cout_mutex);  \
-        std::cout << std::setw(4 * toydb::debug::depth) << ""; \
+        std::cout << std::setw(4 * toydb::debug::depth) << "";       \
         std::cout << __VA_ARGS__ << std::endl;                       \
     }
