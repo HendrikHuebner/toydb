@@ -198,11 +198,11 @@ std::unique_ptr<ast::Expression> Parser::parseWhere() {
 
 DataType parseDataType(Token token, size_t line, size_t pos) {
     if (token.type == TokenType::KeyIntType)
-        return DataType::INT;
+        return DataType::getInt32();
     if (token.type == TokenType::KeyCharType)
-        return DataType::STRING;
+        return DataType::getString();
     if (token.type == TokenType::KeyBoolType)
-        return DataType::BOOL;
+        return DataType::getBool();
     throw ParserException("Unknown data type: " + token.toString(), line, pos);
 }
 

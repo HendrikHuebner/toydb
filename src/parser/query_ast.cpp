@@ -6,10 +6,11 @@ namespace toydb {
 
 namespace ast {
 
+std::ostream& Table::print(std::ostream& os) const noexcept {
+    return os << name;
+}
 
-std::ostream& Table::print(std::ostream& os) const noexcept { return os << name; }
-
-std::ostream& TableExpression::print(std::ostream& os) const noexcept { 
+std::ostream& TableExpression::print(std::ostream& os) const noexcept {
     if (join) {
         if (condition) {
             return os << table << " JOIN " << *join << " ON " << *condition;
@@ -18,12 +19,16 @@ std::ostream& TableExpression::print(std::ostream& os) const noexcept {
         }
     } else {
         return os << table;
-    } 
+    }
 }
 
-std::ostream& Column::print(std::ostream& os) const noexcept { return os << name; }
+std::ostream& Column::print(std::ostream& os) const noexcept {
+    return os << name;
+}
 
-std::ostream& Literal::print(std::ostream& os) const  noexcept { return os << value; };
+std::ostream& Literal::print(std::ostream& os) const noexcept {
+    return os << value;
+};
 
 std::ostream& Condition::print(std::ostream& os) const noexcept {
     if (isUnop()) {
@@ -44,13 +49,13 @@ std::ostream& Select::print(std::ostream& os) const noexcept {
 
     for (size_t i = 0; i < columns.size(); ++i) {
         os << columns[i];
-        if (i < columns.size() - 1) 
+        if (i < columns.size() - 1)
             os << ", ";
     }
 
     for (size_t i = 0; i < tables.size(); ++i) {
         os << tables[i];
-        if (i < tables.size() - 1) 
+        if (i < tables.size() - 1)
             os << ", ";
     }
 
@@ -65,17 +70,20 @@ std::ostream& Select::print(std::ostream& os) const noexcept {
     return os;
 }
 
-
 std::ostream& operator<<(std::ostream& os, const ASTNode& node) {
     return node.print(os);
 }
 
 std::string getDataTypeString(DataType type) noexcept {
-    switch (type) {
-        case DataType::INT: return "INT";
-        case DataType::STRING: return "STRING";
-        case DataType::BOOL: return "BOOL";
-        default: return "UNKNOWN";
+    switch (type.getType()) {
+        case DataType::INT32:
+            return "INT32";
+        case DataType::STRING:
+            return "STRING";
+        case DataType::BOOL:
+            return "BOOL";
+        default:
+            return "UNKNOWN";
     }
 }
 
@@ -142,5 +150,5 @@ std::ostream& operator<<(std::ostream& os, const QueryAST& ast) {
     return os << ast.query_;
 }
 
-} // namespace ast
-} // namespace toydb
+}  // namespace ast
+}  // namespace toydb
