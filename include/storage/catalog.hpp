@@ -47,10 +47,17 @@ struct FileEntry {
     }
 };
 
+
+enum struct StorageFormat { PARQUET, CSV};
+
+std::string storageFormatToString(StorageFormat format) noexcept;
+
+std::optional<StorageFormat> storageFormatFromString(const std::string& s) noexcept;
+
 struct TableMeta {
     std::string name;
     std::string id;
-    std::string format;
+    StorageFormat format;
     std::vector<ColumnMeta> schema;
     std::vector<FileEntry> files;
 
@@ -87,7 +94,7 @@ class Catalog {
     bool addFiles(const std::string& tableName, const std::vector<FileEntry>& newFiles);
 
     bool discoverDirectoryAsTable(const std::string& table_name, const fs::path& dir,
-                                     const std::string& format = "parquet");
+                                     StorageFormat format = StorageFormat::PARQUET);
 
     // Update table schema (e.g., after an ALTER or after inspecting a parquet file)
     bool updateSchema(const std::string& table_name, const std::vector<ColumnMeta>& schema);
@@ -101,7 +108,7 @@ class Catalog {
     std::mutex mutex;
     std::unordered_map<std::string, TableMeta> tables;
 
-    static std::string make_id(const std::string& name);
+    static std::string makeId(const std::string& name) noexcept;
 
     // Persist atomically: write tmp and rename
     void persist_atomic();

@@ -7,7 +7,7 @@
 
 namespace toydb {
 
-static std::string getCurrentTimeStamp() {
+inline std::string getCurrentTimeStamp() noexcept {
     using namespace std::chrono;
     auto t = system_clock::now();
     auto s = system_clock::to_time_t(t);
@@ -17,46 +17,52 @@ static std::string getCurrentTimeStamp() {
 }
 
 class Lockfile {
+public:
+    explicit Lockfile(const std::filesystem::path& p) : path(p), fd(-1) {}
 
-    std::filesystem::path path;
-    int fd = 0;
+    ~Lockfile() {
+        unlock();
+    }
 
-    Lockfile(std::filesystem::path path) : path(path) {}
-
-    bool tryLock() noexcept {
-        fd = open(path.c_str(), O_CREAT | O_WRONLY);
-        if (!fd)
+    bool lock(bool block = true) noexcept {
+        fd = open(path.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0644);
+        if (fd == -1)
             return false;
 
-        int err = flock(fd, LOCK_EX | LOCK_NB);
-
-        if (!err) {
-            // Write the process PID and a timestamp
-            std::string lockInfo =
-                "pid=" + std::to_string(getpid()) + " ts=" + getCurrentTimeStamp();
-            return true;
-        }
-
-        // Lock is being held
-        if (errno == EWOULDBLOCK) {
+        int extraLockFlags = (block ? LOCK_EX | LOCK_NB : 0);
+        if (flock(fd, LOCK_EX | extraLockFlags) != 0) {
+            if (errno != EWOULDBLOCK) {
+                Logger::error("Error locking '{}': {}", path.string(), strerror(errno));
+            }
+            close(fd);
+            fd = -1;
             return false;
         }
 
-        Logger::error("Error locking lock file at '{}': {}", path.string(), strerror(errno));
-        return false;
+        // Write lock metadata
+        std::string info =
+            "pid=" + std::to_string(getpid()) +
+            " ts=" + getCurrentTimeStamp() + "\n";
+        write(fd, info.data(), info.size());
+        fsync(fd);
+
+        return true;
     }
 
     void unlock() noexcept {
-        if (!fd)
-            Logger::warn("No lock being held for lock file at '{}'", path.string());
+        if (fd == -1)
+            return; // nothing to unlock
 
-        int err = flock(fd, LOCK_UN);
-        fd = 0;
+        if (flock(fd, LOCK_UN) != 0)
+            Logger::error("Error unlocking '{}': {}", path.string(), strerror(errno));
 
-        if (err) {
-            Logger::error("Error unlocking lock file at '{}': {}", path.string(), strerror(errno));
-        }
+        close(fd);
+        fd = -1;
     }
+
+private:
+    std::filesystem::path path;
+    int fd;
 };
 
 }  // namespace toydb

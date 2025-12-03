@@ -1,21 +1,50 @@
 
-#pragma once
-
 #include "storage/catalog.hpp"
+#include <exception>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <mutex>
 #include <nlohmann/json.hpp>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include "common/assert.hpp"
+#include "common/logging.hpp"
+#include "storage/lockfile.hpp"
 
 namespace toydb {
 
 namespace fs = std::filesystem;
 using json = nlohmann::json;
+
+std::string storageFormatToString(StorageFormat format) noexcept {
+    switch (format) {
+        case StorageFormat::PARQUET:
+            return "parquet";
+        case StorageFormat::CSV:
+            return "csv";
+        default:
+            tdb_unreachable("Unknown storage format");
+    }
+}
+
+std::optional<StorageFormat> storageFormatFromString(const std::string& s) noexcept {
+    if (s == "parquet") {
+        return StorageFormat::PARQUET;
+    } else if (s == "csv") {
+        return StorageFormat::CSV;
+    } else {
+        return std::nullopt;
+    }
+};
+
+std::string Catalog::makeId(const std::string& name) noexcept {
+    // TODO
+    return name;
+}
 
 std::vector<std::string> Catalog::listTables() {
     std::lock_guard<std::mutex> l(mutex);
@@ -54,7 +83,7 @@ bool Catalog::dropTable(const std::string& name, bool remove_files) {
             fs::remove(f.path, ec);
             // ignore errors for now, but log
             if (ec)
-                std::cerr << "Warning: could not remove " << f.path << ": " << ec.message() << "\n";
+                Logger::warn("Warning: could not remove {}: {}", f.path, ec.message());
         }
     }
     tables.erase(it);
@@ -81,31 +110,31 @@ bool Catalog::addFiles(const std::string& tableName, const std::vector<FileEntry
 }
 
 bool Catalog::discoverDirectoryAsTable(const std::string& table_name, const fs::path& dir,
-                                       const std::string& format) {
+                                       StorageFormat format) {
     if (!fs::exists(dir) || !fs::is_directory(dir))
         return false;
 
     TableMeta meta;
     meta.name = table_name;
-    meta.id = make_id(table_name);
+    meta.id = makeId(table_name);
     meta.format = format;
 
     for (auto& p : fs::directory_iterator(dir)) {
         if (!fs::is_regular_file(p))
             continue;
         // simple extension-based filter
-        if (format == "parquet" && p.path().extension() == ".parquet") {
+        if (format == StorageFormat::PARQUET && p.path().extension() == ".parquet") {
             FileEntry f;
             f.path = p.path().string();
             meta.files.push_back(f);
-        } else if (format == "csv" && p.path().extension() == ".csv") {
+        } else if (format == StorageFormat::CSV && p.path().extension() == ".csv") {
             FileEntry f;
             f.path = p.path().string();
             meta.files.push_back(f);
         }
     }
 
-    std::lock_guard<std::mutex> g(mutex);
+    std::lock_guard<std::mutex> l(mutex);
     if (tables.count(table_name))
         return false;
     tables[table_name] = meta;
@@ -114,7 +143,7 @@ bool Catalog::discoverDirectoryAsTable(const std::string& table_name, const fs::
 }
 
 bool Catalog::updateSchema(const std::string& table_name, const std::vector<ColumnMeta>& schema) {
-    std::lock_guard<std::mutex> g(mutex);
+    std::lock_guard<std::mutex> l(mutex);
     auto it = tables.find(table_name);
     if (it == tables.end())
         return false;
@@ -124,7 +153,7 @@ bool Catalog::updateSchema(const std::string& table_name, const std::vector<Colu
 }
 
 bool Catalog::reload() {
-    std::lock_guard<std::mutex> g(mutex);
+    std::lock_guard<std::mutex> l(mutex);
     return loadOrCreate();
 }
 
@@ -151,7 +180,7 @@ void Catalog::persist_atomic() {
     std::error_code ec;
     fs::rename(tmp, catalog_path, ec);
     if (ec) {
-        std::cerr << "Error writing catalog: " << ec.message() << "\n";
+        Logger::error("Error writing catalog: {}", ec.message());
     }
 }
 
@@ -169,15 +198,20 @@ bool Catalog::loadOrCreate() {
     try {
         ifs >> root;
     } catch (const std::exception& e) {
-        std::cerr << "Failed parse of catalog.json: " << e.what() << "\n";
+        Logger::error("Error reading catalog json: {}", e.what());
         return false;
     }
     ifs.close();
     tables.clear();
     if (root.contains("tables")) {
-        for (auto& tj : root.at("tables")) {
-            TableMeta t = TableMeta::from_json(tj);
-            tables[t.name] = t;
+        try {
+            for (auto& tj : root.at("tables")) {
+                TableMeta t = TableMeta::from_json(tj);
+                tables[t.name] = t;
+            }
+        } catch (const std::exception& e) {
+            Logger::error("Error parsing catalog json: {}", e.what());
+            return false;
         }
     }
     return true;
@@ -187,7 +221,7 @@ json TableMeta::to_json() const {
     json obj;
     obj["name"] = name;
     obj["id"] = id;
-    obj["format"] = format;
+    obj["format"] = storageFormatToString(format);
     obj["schema"] = json::array();
     for (auto& c : schema)
         obj["schema"].push_back(c.to_json());
@@ -201,7 +235,10 @@ TableMeta TableMeta::from_json(const json& obj) {
     TableMeta table;
     table.name = obj.at("name").get<std::string>();
     table.id = obj.at("id").get<std::string>();
-    table.format = obj.at("format").get<std::string>();
+    auto formatOpt = storageFormatFromString(obj.at("format").get<std::string>());
+    if (!formatOpt)
+        throw std::runtime_error("Invalid format while parsing table metadata");
+    table.format = *formatOpt;
     if (obj.contains("schema")) {
         for (auto& cj : obj.at("schema"))
             table.schema.push_back(ColumnMeta::from_json(cj));
