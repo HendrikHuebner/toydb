@@ -2,7 +2,7 @@
 
 #ifdef NDEBUG
 #define tdb_assert(...)
-#define tdb_unreachable(...) __builtin__unreachable()
+#define tdb_unreachable(...) __builtin_unreachable()
 #else
 
 #include <format>
