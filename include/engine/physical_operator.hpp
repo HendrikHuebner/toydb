@@ -129,67 +129,67 @@ class ColumnBuffer {
 };
 
 class RowVectorBuffer {
-    std::vector<ColumnBuffer> columns;
-    std::unordered_map<ColumnId, int64_t, ColumnIdHash> columnIdToIndex;
-    int64_t rowCount;
+    std::vector<ColumnBuffer> columns_;
+    std::unordered_map<ColumnId, int64_t, ColumnIdHash> columnIdToIndex_;
+    int64_t rowCount_;
 
     public:
     int64_t getRowCount() const noexcept {
-        return rowCount;
+        return rowCount_;
     }
 
     int64_t getColumnCount() const noexcept {
-        return static_cast<int64_t>(columns.size());
+        return static_cast<int64_t>(columns_.size());
     }
 
     const std::vector<ColumnBuffer>& getColumns() const noexcept {
-        return columns;
+        return columns_;
     }
 
     const ColumnBuffer& getColumn(int64_t index) const {
         tdb_assert(index >= 0 && static_cast<size_t>(index) < columns.size(),
             "Tried accessing non existing column: " + std::to_string(index));
-        return columns[static_cast<size_t>(index)];
+        return columns_[static_cast<size_t>(index)];
     }
 
     ColumnBuffer& getColumn(int64_t index) {
         tdb_assert(index >= 0 && static_cast<size_t>(index) < columns.size(),
             "Tried accessing non existing column: " + std::to_string(index));
-        return columns[static_cast<size_t>(index)];
+        return columns_[static_cast<size_t>(index)];
     }
 
     const ColumnBuffer& getColumnById(const ColumnId& colId) const {
-        auto it = columnIdToIndex.find(colId);
+        auto it = columnIdToIndex_.find(colId);
         tdb_assert(it != columnIdToIndex.end(),
             "Tried accessing non existing column: " + std::to_string(colId.getId()));
-        return columns[static_cast<size_t>(it->second)];
+        return columns_[static_cast<size_t>(it->second)];
     }
 
     int64_t getColumnIndex(const ColumnId& colId) const {
-        auto it = columnIdToIndex.find(colId);
-        if (it != columnIdToIndex.end()) {
+        auto it = columnIdToIndex_.find(colId);
+        if (it != columnIdToIndex_.end()) {
             return it->second;
         }
         return -1;
     }
 
     void setRowCount(int64_t count) noexcept {
-        rowCount = count;
+        rowCount_ = count;
     }
 
     void addColumn(const ColumnBuffer& col) {
-        int64_t index = static_cast<int64_t>(columns.size());
-        columns.push_back(col);
-        columnIdToIndex[col.columnId] = index;
-        if (rowCount == 0) {
-            rowCount = col.count;
+        int64_t index = static_cast<int64_t>(columns_.size());
+        columns_.push_back(col);
+        columnIdToIndex_[col.columnId] = index;
+        if (rowCount_ == 0) {
+            rowCount_ = col.count;
         }
     }
 
     void addOrReplaceColumn(const ColumnBuffer& col) {
         int64_t index = getColumnIndex(col.columnId);
         if (index != -1) {
-            columns[index] = col;
+            columns_[index] = col;
         } else {
             addColumn(col);
         }
@@ -200,29 +200,29 @@ class RowVectorBuffer {
      * @param maxRows Maximum number of rows to display (default: 20). Set to -1 for all rows.
      */
     std::string toPrettyString(int64_t maxRows = 20) const {
-        if (columns.empty() || rowCount == 0) {
+        if (columns_.empty() || rowCount_ == 0) {
             return "[empty buffer]";
         }
 
         // Calculate column widths for alignment
         std::vector<size_t> colWidths;
-        for (const auto& col : columns) {
+        for (const auto& col : columns_) {
             size_t width = col.columnId.getName().length();
             colWidths.push_back(width);
         }
 
         // Determine how many rows to display
         bool truncated = false;
-        int64_t displayRows = rowCount;
-        if (maxRows >= 0 && rowCount > maxRows) {
+        int64_t displayRows = rowCount_;
+        if (maxRows >= 0 && rowCount_ > maxRows) {
             displayRows = maxRows;
             truncated = true;
         }
 
         // First pass: calculate maximum width for each column
         for (int64_t row = 0; row < displayRows; ++row) {
-            for (size_t colIdx = 0; colIdx < columns.size(); ++colIdx) {
-                std::string valueStr = columns[colIdx].getValueAsString(row);
+            for (size_t colIdx = 0; colIdx < columns_.size(); ++colIdx) {
+                std::string valueStr = columns_[colIdx].getValueAsString(row);
                 if (valueStr.length() > colWidths[colIdx]) {
                     colWidths[colIdx] = valueStr.length();
                 }
@@ -233,15 +233,15 @@ class RowVectorBuffer {
 
         // Print header
         result += "+";
-        for (size_t colIdx = 0; colIdx < columns.size(); ++colIdx) {
+        for (size_t colIdx = 0; colIdx < columns_.size(); ++colIdx) {
             result += std::string(colWidths[colIdx] + 2, '-');
             result += "+";
         }
         result += "\n";
 
         result += "|";
-        for (size_t colIdx = 0; colIdx < columns.size(); ++colIdx) {
-            std::string name = columns[colIdx].columnId.getName();
+        for (size_t colIdx = 0; colIdx < columns_.size(); ++colIdx) {
+            std::string name = columns_[colIdx].columnId.getName();
             result += " " + name;
             result += std::string(colWidths[colIdx] - name.length() + 1, ' ');
             result += "|";
@@ -249,7 +249,7 @@ class RowVectorBuffer {
         result += "\n";
 
         result += "+";
-        for (size_t colIdx = 0; colIdx < columns.size(); ++colIdx) {
+        for (size_t colIdx = 0; colIdx < columns_.size(); ++colIdx) {
             result += std::string(colWidths[colIdx] + 2, '-');
             result += "+";
         }
@@ -258,8 +258,8 @@ class RowVectorBuffer {
         // Print rows
         for (int64_t row = 0; row < displayRows; ++row) {
             result += "|";
-            for (size_t colIdx = 0; colIdx < columns.size(); ++colIdx) {
-                std::string valueStr = columns[colIdx].getValueAsString(row);
+            for (size_t colIdx = 0; colIdx < columns_.size(); ++colIdx) {
+                std::string valueStr = columns_[colIdx].getValueAsString(row);
                 result += " " + valueStr;
                 result += std::string(colWidths[colIdx] - valueStr.length() + 1, ' ');
                 result += "|";
@@ -270,28 +270,28 @@ class RowVectorBuffer {
         // Print truncation indicator if needed
         if (truncated) {
             result += "+";
-            for (size_t colIdx = 0; colIdx < columns.size(); ++colIdx) {
+            for (size_t colIdx = 0; colIdx < columns_.size(); ++colIdx) {
                 result += std::string(colWidths[colIdx] + 2, '-');
                 result += "+";
             }
             result += "\n";
-            
-            std::string truncMsg = "... (" + std::to_string(rowCount - maxRows) + " more rows)";
+
+            std::string truncMsg = "... (" + std::to_string(rowCount_ - maxRows) + " more rows)";
             // Ensure message fits in first column width
             if (truncMsg.length() > colWidths[0]) {
-                truncMsg = "... (" + std::to_string(rowCount - maxRows) + " more)";
+                truncMsg = "... (" + std::to_string(rowCount_ - maxRows) + " more)";
                 if (truncMsg.length() > colWidths[0]) {
                     truncMsg = "...";
                 }
             }
-            
+
             result += "|";
             result += " " + truncMsg;
             result += std::string(colWidths[0] - truncMsg.length() + 1, ' ');
             result += "|";
-            
+
             // Fill remaining columns with spaces
-            for (size_t colIdx = 1; colIdx < columns.size(); ++colIdx) {
+            for (size_t colIdx = 1; colIdx < columns_.size(); ++colIdx) {
                 result += std::string(colWidths[colIdx] + 2, ' ');
                 result += "|";
             }
@@ -300,7 +300,7 @@ class RowVectorBuffer {
 
         // Print footer
         result += "+";
-        for (size_t colIdx = 0; colIdx < columns.size(); ++colIdx) {
+        for (size_t colIdx = 0; colIdx < columns_.size(); ++colIdx) {
             result += std::string(colWidths[colIdx] + 2, '-');
             result += "+";
         }

@@ -43,7 +43,7 @@ public:
 
         for (int64_t i = 0; i < buffer.getColumnCount(); ++i) {
             const ColumnBuffer& col = buffer.getColumn(i);
-            [[maybe_unused]] auto it = columnIndexMap_.find(col.columnId);
+            [[maybe_unused]] auto it = columnIndexMap_.find(col.columnId_);
             tdb_assert(it != columnIndexMap_.end(),
                        "Column {} in buffer is not referenced by predicate", col.columnId.getName());
             tdb_assert(static_cast<int64_t>(it->second) == i,
@@ -273,14 +273,14 @@ private:
 
             // Extract value based on type
             if constexpr (std::is_same_v<T, int64_t>) {
-                if (col.type == DataType::getInt64()) {
+                if (col.type_ == DataType::getInt64()) {
                     int64_t* data = static_cast<int64_t*>(col.data);
                     value = data[rowIndex];
                     isNull = false;
                     return true;
                 }
             } else if constexpr (std::is_same_v<T, double>) {
-                if (col.type == DataType::getDouble()) {
+                if (col.type_ == DataType::getDouble()) {
                     double* data = static_cast<double*>(col.data);
                     value = data[rowIndex];
                     isNull = false;
