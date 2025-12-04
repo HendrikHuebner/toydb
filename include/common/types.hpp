@@ -9,7 +9,7 @@
 
 namespace toydb {
 
-enum class CmpOp { EQUAL, NOT_EQUAL, GREATER, LESS, GREATER_EQUAL, LESS_EQUAL, AND, OR, NOT };
+enum class CompareOp { EQUAL, NOT_EQUAL, GREATER, LESS, GREATER_EQUAL, LESS_EQUAL, AND, OR, NOT };
 
 /**
  * @brief Column identifier with a unique ID and human-readable name

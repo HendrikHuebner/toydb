@@ -57,7 +57,7 @@ struct Literal : public Expression {
 };
 
 struct Condition : public Expression {
-    CmpOp op;
+    CompareOp op;
     std::unique_ptr<Expression> left, right;
 
     bool isUnop() const { return right == nullptr; }
@@ -65,25 +65,25 @@ struct Condition : public Expression {
     std::ostream& print(std::ostream&) const noexcept override;
 
    private:
-    static std::string getOperatorString(CmpOp op) noexcept {
+    static std::string getOperatorString(CompareOp op) noexcept {
         switch (op) {
-            case CmpOp::EQUAL:
+            case CompareOp::EQUAL:
                 return "=";
-            case CmpOp::NOT_EQUAL:
+            case CompareOp::NOT_EQUAL:
                 return "!=";
-            case CmpOp::GREATER:
+            case CompareOp::GREATER:
                 return ">";
-            case CmpOp::LESS:
+            case CompareOp::LESS:
                 return "<";
-            case CmpOp::GREATER_EQUAL:
+            case CompareOp::GREATER_EQUAL:
                 return ">=";
-            case CmpOp::LESS_EQUAL:
+            case CompareOp::LESS_EQUAL:
                 return "<=";
-            case CmpOp::AND:
+            case CompareOp::AND:
                 return "AND";
-            case CmpOp::OR:
+            case CompareOp::OR:
                 return "OR";
-            case CmpOp::NOT:
+            case CompareOp::NOT:
                 return "NOT";
             default:
                 return "";

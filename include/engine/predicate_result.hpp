@@ -182,6 +182,12 @@ public:
                 break;
         }
     }
+
+    void setAll(PredicateValue value) noexcept {
+        for (int64_t i = 0; i < size_; ++i) {
+            set(i, value);
+        }
+    }
 };
 
 /**
@@ -215,6 +221,10 @@ public:
 
     void set(int64_t index, PredicateValue value) noexcept {
         bitmask_.set(index, value);
+    }
+
+    void setAll(PredicateValue value) noexcept {
+        bitmask_.setAll(value);
     }
 
     PredicateValue get(int64_t index) const noexcept {
