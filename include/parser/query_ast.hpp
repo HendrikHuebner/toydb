@@ -152,7 +152,7 @@ struct Delete : public ASTNode {
     std::ostream& print(std::ostream&) const noexcept override;
 };
 
-struct Select : public ASTNode {
+struct SelectFrom : public ASTNode {
     std::vector<Column> columns;
     std::vector<TableExpr> tables;
     std::unique_ptr<Expression> where;

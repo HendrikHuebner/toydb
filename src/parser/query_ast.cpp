@@ -38,7 +38,7 @@ std::ostream& Condition::print(std::ostream& os) const noexcept {
     }
 }
 
-std::ostream& Select::print(std::ostream& os) const noexcept {
+std::ostream& SelectFrom::print(std::ostream& os) const noexcept {
     tdb_assert(columns.size() > 0, "Select node must have at least one column");
     tdb_assert(tables.size() > 0, "Select node must have at least one table");
 

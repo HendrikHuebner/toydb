@@ -105,46 +105,89 @@ class ParserTest : public ::testing::Test {
         }
         return createTable;
     }
+
+    // Comparison condition helpers - create binary comparison conditions
+    std::unique_ptr<Condition> eq(const std::string& left, const std::string& right) {
+        return makeCondition(CompareOp::EQUAL, makeLiteral(left), makeLiteral(right));
+    }
+
+    std::unique_ptr<Condition> ne(const std::string& left, const std::string& right) {
+        return makeCondition(CompareOp::NOT_EQUAL, makeLiteral(left), makeLiteral(right));
+    }
+
+    std::unique_ptr<Condition> gt(const std::string& left, const std::string& right) {
+        return makeCondition(CompareOp::GREATER, makeLiteral(left), makeLiteral(right));
+    }
+
+    std::unique_ptr<Condition> lt(const std::string& left, const std::string& right) {
+        return makeCondition(CompareOp::LESS, makeLiteral(left), makeLiteral(right));
+    }
+
+    std::unique_ptr<Condition> gte(const std::string& left, const std::string& right) {
+        return makeCondition(CompareOp::GREATER_EQUAL, makeLiteral(left), makeLiteral(right));
+    }
+
+    std::unique_ptr<Condition> lte(const std::string& left, const std::string& right) {
+        return makeCondition(CompareOp::LESS_EQUAL, makeLiteral(left), makeLiteral(right));
+    }
+
+    // Logical condition helpers - chain AND/OR conditions
+    std::unique_ptr<Condition> andCond(std::unique_ptr<Condition> left, std::unique_ptr<Condition> right) {
+        return makeCondition(CompareOp::AND, std::move(left), std::move(right));
+    }
+
+    std::unique_ptr<Condition> orCond(std::unique_ptr<Condition> left, std::unique_ptr<Condition> right) {
+        return makeCondition(CompareOp::OR, std::move(left), std::move(right));
+    }
+
+    // Helper to create UPDATE assignments from initializer list
+    std::vector<std::pair<std::string, std::unique_ptr<Expression>>> makeAssignments(
+        std::initializer_list<std::pair<std::string, std::string>> pairs) {
+        std::vector<std::pair<std::string, std::unique_ptr<Expression>>> assignments;
+        for (const auto& [col, val] : pairs) {
+            assignments.emplace_back(col, makeLiteral(val));
+        }
+        return assignments;
+    }
+
+    // Helper to create multiple rows for INSERT
+    std::vector<std::vector<std::unique_ptr<Expression>>> makeRows(
+        std::initializer_list<std::initializer_list<std::string>> rowLists) {
+        std::vector<std::vector<std::unique_ptr<Expression>>> rows;
+        for (const auto& rowList : rowLists) {
+            rows.push_back(makeRow(rowList));
+        }
+        return rows;
+    }
 };
 
 // INSERT tests
 TEST_F(ParserTest, Insert) {
-    std::vector<std::vector<std::unique_ptr<Expression>>> rows;
-    rows.push_back(makeRow({"False"}));
-    auto insert = makeInsertInto("booleans", {"id"}, std::move(rows));
+    auto insert = makeInsertInto("booleans", {"id"}, makeRows({{"False"}}));
     QueryAST expected(insert.release());
     testSuccessfulParse("INSERT INTO booleans (id) VALUES (False);", expected);
 }
 
 TEST_F(ParserTest, InsertWithColumns) {
-    std::vector<std::vector<std::unique_ptr<Expression>>> rows;
-    rows.push_back(makeRow({"1", "John", "0", "True"}));
-    auto insert = makeInsertInto("users", {"id", "name", "age", "is_male"}, std::move(rows));
+    auto insert = makeInsertInto("users", {"id", "name", "age", "is_male"}, makeRows({{"1", "John", "0", "True"}}));
     QueryAST expected(insert.release());
     testSuccessfulParse("INSERT INTO users (id, name, age, is_male) VALUES (1, 'John', 0, True)", expected);
 }
 
 TEST_F(ParserTest, InsertWithSemicolon) {
-    std::vector<std::vector<std::unique_ptr<Expression>>> rows;
-    rows.push_back(makeRow({"99", "David"}));
-    auto insert = makeInsertInto("users", {"id", "name"}, std::move(rows));
+    auto insert = makeInsertInto("users", {"id", "name"}, makeRows({{"99", "David"}}));
     QueryAST expected(insert.release());
     testSuccessfulParse("INSERT INTO users (id, name) VALUES (99, 'David');", expected);
 }
 
 TEST_F(ParserTest, InsertWithoutColumns) {
-    std::vector<std::vector<std::unique_ptr<Expression>>> rows;
-    rows.push_back(makeRow({"1", "John", "30"}));
-    auto insert = makeInsertInto("users", std::move(rows));
+    auto insert = makeInsertInto("users", makeRows({{"1", "John", "30"}}));
     QueryAST expected(insert.release());
     testSuccessfulParse("INSERT INTO users VALUES (1, 'John', 30)", expected);
 }
 
 TEST_F(ParserTest, InsertMultipleRows) {
-    std::vector<std::vector<std::unique_ptr<Expression>>> rows;
-    rows.push_back(makeRow({"1", "John Doe"}));
-    rows.push_back(makeRow({"2", "Jane"}));
-    auto insert = makeInsertInto("users", {"id", "name"}, std::move(rows));
+    auto insert = makeInsertInto("users", {"id", "name"}, makeRows({{"1", "John Doe"}, {"2", "Jane"}}));
     QueryAST expected(insert.release());
     testSuccessfulParse("INSERT INTO users (id, name) VALUES (1, 'John Doe'), (2, 'Jane')", expected);
 }
@@ -173,78 +216,51 @@ TEST_F(ParserTest, InsertTooManyValues) {
 
 // UPDATE tests
 TEST_F(ParserTest, UpdateWithWhere) {
-    std::vector<std::pair<std::string, std::unique_ptr<Expression>>> assignments;
-    assignments.emplace_back("name", makeLiteral("John"));
-    assignments.emplace_back("age", makeLiteral("30"));
-    auto where = makeCondition(CompareOp::EQUAL, makeLiteral("id"), makeLiteral("1"));
-    auto update = makeUpdate("users", std::move(assignments), std::move(where));
+    auto update = makeUpdate("users", makeAssignments({{"name", "John"}, {"age", "30"}}), eq("id", "1"));
     QueryAST expected(update.release());
     testSuccessfulParse("UPDATE users SET name = 'John', age = 30 WHERE id = 1", expected);
 }
 
 TEST_F(ParserTest, UpdateWithWhere2) {
-    std::vector<std::pair<std::string, std::unique_ptr<Expression>>> assignments;
-    assignments.emplace_back("name", makeLiteral("John"));
-    assignments.emplace_back("age", makeLiteral("30"));
-    auto where = makeCondition(CompareOp::AND,
-                               makeCondition(CompareOp::EQUAL, makeLiteral("id"), makeLiteral("1")),
-                               makeCondition(CompareOp::EQUAL, makeLiteral("age"), makeLiteral("12")));
-    auto update = makeUpdate("users", std::move(assignments), std::move(where));
+    auto where = andCond(eq("id", "1"), eq("age", "12"));
+    auto update = makeUpdate("users", makeAssignments({{"name", "John"}, {"age", "30"}}), std::move(where));
     QueryAST expected(update.release());
     testSuccessfulParse("UPDATE users SET name = 'John', age = 30 WHERE id = 1 AND age = 12", expected);
 }
 
 TEST_F(ParserTest, UpdateWithWhere3) {
-    std::vector<std::pair<std::string, std::unique_ptr<Expression>>> assignments;
-    assignments.emplace_back("name", makeLiteral("John"));
-    assignments.emplace_back("age", makeLiteral("30"));
-    auto where = makeCondition(CompareOp::OR,
-                               makeCondition(CompareOp::EQUAL, makeLiteral("id"), makeLiteral("1")),
-                               makeCondition(CompareOp::EQUAL, makeLiteral("name"), makeLiteral("Bob")));
-    auto update = makeUpdate("users", std::move(assignments), std::move(where));
+    auto where = orCond(eq("id", "1"), eq("name", "Bob"));
+    auto update = makeUpdate("users", makeAssignments({{"name", "John"}, {"age", "30"}}), std::move(where));
     QueryAST expected(update.release());
     testSuccessfulParse("UPDATE users SET name = 'John', age = 30 WHERE id = 1 OR name = 'Bob'", expected);
 }
 
 TEST_F(ParserTest, UpdateWithWhere4) {
-    std::vector<std::pair<std::string, std::unique_ptr<Expression>>> assignments;
-    assignments.emplace_back("name", makeLiteral("John"));
-    assignments.emplace_back("age", makeLiteral("30"));
     // WHERE id <= 1 OR (id = 2 OR id = 3) OR (id > 4)
-    auto where = makeCondition(CompareOp::OR,
-                              makeCondition(CompareOp::OR,
-                                           makeCondition(CompareOp::LESS_EQUAL, makeLiteral("id"), makeLiteral("1")),
-                                           makeCondition(CompareOp::OR,
-                                                        makeCondition(CompareOp::EQUAL, makeLiteral("id"), makeLiteral("2")),
-                                                        makeCondition(CompareOp::EQUAL, makeLiteral("id"), makeLiteral("3")))),
-                                        makeCondition(CompareOp::GREATER, makeLiteral("id"), makeLiteral("4")));
-    auto update = makeUpdate("users", std::move(assignments), std::move(where));
+    auto where = orCond(
+        orCond(lte("id", "1"), orCond(eq("id", "2"), eq("id", "3"))),
+        gt("id", "4")
+    );
+    auto update = makeUpdate("users", makeAssignments({{"name", "John"}, {"age", "30"}}), std::move(where));
     QueryAST expected(update.release());
     testSuccessfulParse(
         "UPDATE users SET name = 'John', age = 30 WHERE id <= 1 OR (id = 2 OR id = 3) OR (id > 4)", expected);
 }
 
 TEST_F(ParserTest, UpdateWithWhere5) {
-    std::vector<std::pair<std::string, std::unique_ptr<Expression>>> assignments;
-    assignments.emplace_back("name", makeLiteral("John"));
-    assignments.emplace_back("age", makeLiteral("30"));
     // WHERE (id != 1 OR id <= 5) AND (age > 23)
-    auto where = makeCondition(CompareOp::AND,
-                               makeCondition(CompareOp::OR,
-                                           makeCondition(CompareOp::NOT_EQUAL, makeLiteral("id"), makeLiteral("1")),
-                                           makeCondition(CompareOp::LESS_EQUAL, makeLiteral("id"), makeLiteral("5"))),
-                               makeCondition(CompareOp::GREATER, makeLiteral("age"), makeLiteral("23")));
-    auto update = makeUpdate("users", std::move(assignments), std::move(where));
+    auto where = andCond(
+        orCond(ne("id", "1"), lte("id", "5")),
+        gt("age", "23")
+    );
+    auto update = makeUpdate("users", makeAssignments({{"name", "John"}, {"age", "30"}}), std::move(where));
     QueryAST expected(update.release());
     testSuccessfulParse(
         "UPDATE users SET name = 'John', age = 30 WHERE (id != 1 OR id <= 5) AND (age > 23)", expected);
 }
 
 TEST_F(ParserTest, UpdateWithoutWhere) {
-    std::vector<std::pair<std::string, std::unique_ptr<Expression>>> assignments;
-    assignments.emplace_back("name", makeLiteral("John"));
-    assignments.emplace_back("age", makeLiteral("30"));
-    auto update = makeUpdate("users", std::move(assignments));
+    auto update = makeUpdate("users", makeAssignments({{"name", "John"}, {"age", "30"}}));
     QueryAST expected(update.release());
     testSuccessfulParse("UPDATE users SET name = 'John', age = 30", expected);
 }
@@ -259,7 +275,7 @@ TEST_F(ParserTest, UpdateMissingSet) {
 
 // DELETE tests
 TEST_F(ParserTest, DeleteWithWhere) {
-    auto deleteStmt = makeDelete("users", makeCondition(CompareOp::EQUAL, makeLiteral("id"), makeLiteral("1")));
+    auto deleteStmt = makeDelete("users", eq("id", "1"));
     QueryAST expected(deleteStmt.release());
     testSuccessfulParse("DELETE FROM users WHERE id = 1", expected);
 }

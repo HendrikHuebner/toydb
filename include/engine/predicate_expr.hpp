@@ -7,9 +7,19 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+#include "common/logging.hpp"
 #include "common/types.hpp"
 #include "engine/physical_operator.hpp"
 #include "engine/predicate_result.hpp"
+
+template<>
+struct fmt::formatter<toydb::ColumnId> : fmt::formatter<std::string>
+{
+    auto format(toydb::ColumnId colId, format_context &ctx) const -> decltype(ctx.out())
+    {
+        return fmt::format_to(ctx.out(), "ColumnId(id={}, name=\"{}\")", colId.getId(), colId.getName());
+    }
+};
 
 namespace toydb {
 
@@ -37,17 +47,11 @@ public:
      * @brief Debug assertions to check that the index map matches the location of the columns in the buffer
      */
     void assertIndexMapValid([[maybe_unused]] const RowVectorBuffer& buffer) const noexcept {
-        tdb_assert(static_cast<int64_t>(columnIndexMap_.size()) == buffer.getColumnCount(),
-                   "Buffer column count mismatch: expected " + std::to_string(columnIndexMap_.size()) +
-                   " columns, got " + std::to_string(buffer.getColumnCount()));
-
-        for (int64_t i = 0; i < buffer.getColumnCount(); ++i) {
-            const ColumnBuffer& col = buffer.getColumn(i);
-            [[maybe_unused]] auto it = columnIndexMap_.find(col.columnId);
-            tdb_assert(it != columnIndexMap_.end(),
-                       "Column {} in buffer is not referenced by predicate", col.columnId.getName());
-            tdb_assert(static_cast<int64_t>(it->second) == i,
-                       "Column {} at buffer index {} but expected at index {}", col.columnId.getName(), i, it->second);
+        tdb_assert(static_cast<int64_t>(columnIndexMap_.size()) <= buffer.getColumnCount(),
+                   "Buffer column count mismatch: expected at most {}, got {}", columnIndexMap_.size(), buffer.getColumnCount());
+        for (const auto& [colId, idx] : columnIndexMap_) {
+            const ColumnBuffer& col = buffer.getColumn(idx);
+            tdb_assert(col.columnId == colId, "Column index mismatch: expected column ID {} but got {}", colId, col.columnId);
         }
     }
 
