@@ -91,14 +91,14 @@ struct Condition : public Expression {
     }
 };
 
-struct TableExpression : public ASTNode {
+struct TableExpr : public ASTNode {
     Table table;
-    std::unique_ptr<TableExpression> join;
+    std::unique_ptr<TableExpr> join;
     std::unique_ptr<Expression> condition;
 
-    TableExpression(const Table& table) noexcept : table(table) {}
+    TableExpr(const Table& table) noexcept : table(table) {}
 
-    TableExpression(const Table& table, std::unique_ptr<TableExpression> join) noexcept
+    TableExpr(const Table& table, std::unique_ptr<TableExpr> join) noexcept
         : table(table), join(std::move(join)) {}
 
     std::ostream& print(std::ostream&) const noexcept override;
@@ -154,7 +154,7 @@ struct Delete : public ASTNode {
 
 struct Select : public ASTNode {
     std::vector<Column> columns;
-    std::vector<TableExpression> tables;
+    std::vector<TableExpr> tables;
     std::unique_ptr<Expression> where;
     std::optional<Column> orderBy;
     bool distinct = false;

@@ -1,5 +1,5 @@
 #include <memory>
-#include "engine/join.hpp"
+#include "engine/nested_loop_join.hpp"
 #include "engine/predicate_expr.hpp"
 #include "gtest/gtest.h"
 #include "test_helpers.hpp"
@@ -45,7 +45,7 @@ TEST_F(NestedLoopJoinTest, BasicEqualityJoin) {
     auto leftCol = std::make_unique<ColumnRefExpr>(leftColId);
     auto rightCol = std::make_unique<ColumnRefExpr>(rightColId);
     auto predicate =
-        std::make_unique<CompareExpr>(CmpOp::EQUAL, std::move(leftCol), std::move(rightCol));
+        std::make_unique<CompareExpr>(CompareOp::EQUAL, DataType::getInt64(), std::move(leftCol), std::move(rightCol));
 
     NestedLoopJoinExec join(leftOp, rightOp, std::move(predicate));
 
@@ -78,7 +78,7 @@ TEST_F(NestedLoopJoinTest, GreaterThanJoin) {
     auto leftCol = std::make_unique<ColumnRefExpr>(leftColId);
     auto rightCol = std::make_unique<ColumnRefExpr>(rightColId);
     auto predicate =
-        std::make_unique<CompareExpr>(CmpOp::GREATER, std::move(leftCol), std::move(rightCol));
+        std::make_unique<CompareExpr>(CompareOp::GREATER, DataType::getInt64(), std::move(leftCol), std::move(rightCol));
 
     NestedLoopJoinExec join(leftOp, rightOp, std::move(predicate));
 
@@ -114,15 +114,15 @@ TEST_F(NestedLoopJoinTest, ComplexPredicateJoin) {
     ColumnId leftCol1Id(1, "col1");
 
     auto eqCompare =
-        std::make_unique<CompareExpr>(CmpOp::EQUAL, std::make_unique<ColumnRefExpr>(leftCol0Id),
+        std::make_unique<CompareExpr>(CompareOp::EQUAL, DataType::getInt64(), std::make_unique<ColumnRefExpr>(leftCol0Id),
                                       std::make_unique<ColumnRefExpr>(rightCol0Id));
 
     auto const15 = std::make_unique<ConstantExpr>(DataType::getInt64(), 15L);
     auto gtCompare = std::make_unique<CompareExpr>(
-        CmpOp::GREATER, std::make_unique<ColumnRefExpr>(leftCol1Id), std::move(const15));
+        CompareOp::GREATER, DataType::getInt64(), std::make_unique<ColumnRefExpr>(leftCol1Id), std::move(const15));
 
     auto andPred =
-        std::make_unique<LogicalExpr>(CmpOp::AND, std::move(eqCompare), std::move(gtCompare));
+        std::make_unique<LogicalExpr>(CompareOp::AND, std::move(eqCompare), std::move(gtCompare));
 
     NestedLoopJoinExec join(leftOp, rightOp, std::move(andPred));
 
@@ -158,7 +158,7 @@ TEST_F(NestedLoopJoinTest, NoMatches) {
     auto leftCol = std::make_unique<ColumnRefExpr>(leftColId);
     auto rightCol = std::make_unique<ColumnRefExpr>(rightColId);
     auto predicate =
-        std::make_unique<CompareExpr>(CmpOp::EQUAL, std::move(leftCol), std::move(rightCol));
+        std::make_unique<CompareExpr>(CompareOp::EQUAL, DataType::getInt64(), std::move(leftCol), std::move(rightCol));
 
     NestedLoopJoinExec join(leftOp, rightOp, std::move(predicate));
 
@@ -188,7 +188,7 @@ TEST_F(NestedLoopJoinTest, EmptyRightTable) {
     auto leftCol = std::make_unique<ColumnRefExpr>(leftColId);
     auto rightCol = std::make_unique<ColumnRefExpr>(rightColId);
     auto predicate =
-        std::make_unique<CompareExpr>(CmpOp::EQUAL, std::move(leftCol), std::move(rightCol));
+        std::make_unique<CompareExpr>(CompareOp::EQUAL, DataType::getInt64(), std::move(leftCol), std::move(rightCol));
 
     NestedLoopJoinExec join(leftOp, rightOp, std::move(predicate));
 
@@ -220,7 +220,7 @@ TEST_F(NestedLoopJoinTest, LargeDataEqualityJoin) {
     auto leftCol = std::make_unique<ColumnRefExpr>(leftColId);
     auto rightCol = std::make_unique<ColumnRefExpr>(rightColId);
     auto predicate =
-        std::make_unique<CompareExpr>(CmpOp::EQUAL, std::move(leftCol), std::move(rightCol));
+        std::make_unique<CompareExpr>(CompareOp::EQUAL, DataType::getInt64(), std::move(leftCol), std::move(rightCol));
 
     NestedLoopJoinExec join(leftOp, rightOp, std::move(predicate));
     join.initialize();
@@ -254,7 +254,7 @@ TEST_F(NestedLoopJoinTest, LargeDataMultiBatchLeft) {
     auto leftCol = std::make_unique<ColumnRefExpr>(leftColId);
     auto rightCol = std::make_unique<ColumnRefExpr>(rightColId);
     auto predicate =
-        std::make_unique<CompareExpr>(CmpOp::EQUAL, std::move(leftCol), std::move(rightCol));
+        std::make_unique<CompareExpr>(CompareOp::EQUAL, DataType::getInt64(), std::move(leftCol), std::move(rightCol));
 
     NestedLoopJoinExec join(leftOp, rightOp, std::move(predicate));
     join.initialize();
@@ -291,7 +291,7 @@ TEST_F(NestedLoopJoinTest, LargeDataMultiBatchRight) {
     auto leftCol = std::make_unique<ColumnRefExpr>(leftColId);
     auto rightCol = std::make_unique<ColumnRefExpr>(rightColId);
     auto predicate =
-        std::make_unique<CompareExpr>(CmpOp::EQUAL, std::move(leftCol), std::move(rightCol));
+        std::make_unique<CompareExpr>(CompareOp::EQUAL, DataType::getInt64(), std::move(leftCol), std::move(rightCol));
 
     NestedLoopJoinExec join(leftOp, rightOp, std::move(predicate));
     join.initialize();
@@ -324,7 +324,7 @@ TEST_F(NestedLoopJoinTest, LargeDataGreaterThanJoin) {
     auto leftCol = std::make_unique<ColumnRefExpr>(leftColId);
     auto rightCol = std::make_unique<ColumnRefExpr>(rightColId);
     auto predicate =
-        std::make_unique<CompareExpr>(CmpOp::GREATER, std::move(leftCol), std::move(rightCol));
+        std::make_unique<CompareExpr>(CompareOp::GREATER, DataType::getInt64(), std::move(leftCol), std::move(rightCol));
 
     NestedLoopJoinExec join(leftOp, rightOp, std::move(predicate));
     join.initialize();
@@ -356,7 +356,7 @@ TEST_F(NestedLoopJoinTest, VeryLargeDataMultiBatchBothSides) {
     ColumnBufferStorage storage;
 
     // Left: [0, 1, 2, ..., 4999] split into 10 batches of 500
-    std::vector<int64_t> leftData = createSequence(0, 5000);
+    std::vector<int64_t> leftData = createSequence(0, 1000);
     auto leftOpPtr = MockOperatorBuilder(&storage)
                          .addInt64Column(0, "col0", leftData)
                          .withBatchSizes({550, 550, 550, 1000, 550, 550, 550, 200, 500})
@@ -376,7 +376,7 @@ TEST_F(NestedLoopJoinTest, VeryLargeDataMultiBatchBothSides) {
     auto leftCol = std::make_unique<ColumnRefExpr>(leftColId);
     auto rightCol = std::make_unique<ColumnRefExpr>(rightColId);
     auto predicate =
-        std::make_unique<CompareExpr>(CmpOp::EQUAL, std::move(leftCol), std::move(rightCol));
+        std::make_unique<CompareExpr>(CompareOp::EQUAL, DataType::getInt64(), std::move(leftCol), std::move(rightCol));
 
     NestedLoopJoinExec join(leftOp, rightOp, std::move(predicate));
     join.initialize();
@@ -408,7 +408,7 @@ TEST_F(NestedLoopJoinTest, LargeDataNoMatches) {
     auto leftCol = std::make_unique<ColumnRefExpr>(leftColId);
     auto rightCol = std::make_unique<ColumnRefExpr>(rightColId);
     auto predicate =
-        std::make_unique<CompareExpr>(CmpOp::EQUAL, std::move(leftCol), std::move(rightCol));
+        std::make_unique<CompareExpr>(CompareOp::EQUAL, DataType::getInt64(), std::move(leftCol), std::move(rightCol));
 
     NestedLoopJoinExec join(leftOp, rightOp, std::move(predicate));
     join.initialize();

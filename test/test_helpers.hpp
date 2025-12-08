@@ -2,6 +2,7 @@
 
 #include "engine/physical_operator.hpp"
 #include "common/types.hpp"
+#include "parser/query_ast.hpp"
 #include <vector>
 #include <random>
 #include <string>
@@ -11,11 +12,20 @@
 namespace toydb::test {
 
 /**
+ * @brief Recursively compare two AST nodes for equality
+ */
+bool compareASTNodes(const toydb::ast::ASTNode* expected,
+                     const toydb::ast::ASTNode* actual,
+                     const std::string& path = "root");
+
+/**
+ * @brief Compare two QueryAST objects for equality
+ */
+bool compareQueryAST(const toydb::ast::QueryAST& expected,
+                     const toydb::ast::QueryAST& actual);
+
+/**
  * @brief RAII helper for managing column buffer storage in tests
- *
- * This class stores the actual data for column buffers, ensuring that
- * ColumnBuffer objects point to valid memory that persists throughout
- * the test lifetime.
  */
 class ColumnBufferStorage {
 private:
@@ -323,6 +333,5 @@ inline std::unique_ptr<PhysicalOperator> MockOperatorBuilder::build() {
 
     return std::make_unique<MockOperator>(storage_, std::move(batches));
 }
-
 } // namespace toydb::test
 

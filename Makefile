@@ -1,4 +1,4 @@
-.PHONY: debug relwithdebug asan clean all help test test-verbose test-%
+.PHONY: build debug relwithdebug asan clean all help test test-verbose test-%
 
 BUILD_DIR := build
 
@@ -13,6 +13,10 @@ CMAKE_FLAGS := -G Ninja \
 	-DTDB_USE_LINKER=$(LINKER)
 
 all: relwithdebug
+
+build:
+	@echo "Building..."
+	cmake --build $(BUILD_DIR)
 
 debug:
 	@echo "Configuring CMake for Debug build..."
@@ -43,15 +47,15 @@ clean:
 	@echo "Cleaning build directory..."
 	rm -rf $(BUILD_DIR)
 
-test:
+test: build
 	@echo "Running all tests..."
 	@cd $(BUILD_DIR) && ctest --output-on-failure
 
-test-verbose:
+test-verbose: build
 	@echo "Running all tests (verbose)..."
 	@cd $(BUILD_DIR) && ctest --verbose --output-on-failure
 
-test-%:
+test-%: build
 	@echo "Running test: $*"
 	@cd $(BUILD_DIR) && ctest --output-on-failure -R "^$*$$"
 

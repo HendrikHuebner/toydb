@@ -147,20 +147,20 @@ class RowVectorBuffer {
     }
 
     const ColumnBuffer& getColumn(int64_t index) const {
-        tdb_assert(index >= 0 && static_cast<size_t>(index) < columns.size(),
+        tdb_assert(index >= 0 && static_cast<size_t>(index) < columns_.size(),
             "Tried accessing non existing column: " + std::to_string(index));
         return columns_[static_cast<size_t>(index)];
     }
 
     ColumnBuffer& getColumn(int64_t index) {
-        tdb_assert(index >= 0 && static_cast<size_t>(index) < columns.size(),
+        tdb_assert(index >= 0 && static_cast<size_t>(index) < columns_.size(),
             "Tried accessing non existing column: " + std::to_string(index));
         return columns_[static_cast<size_t>(index)];
     }
 
     const ColumnBuffer& getColumnById(const ColumnId& colId) const {
         auto it = columnIdToIndex_.find(colId);
-        tdb_assert(it != columnIdToIndex.end(),
+        tdb_assert(it != columnIdToIndex_.end(),
             "Tried accessing non existing column: " + std::to_string(colId.getId()));
         return columns_[static_cast<size_t>(it->second)];
     }

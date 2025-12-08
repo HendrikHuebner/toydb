@@ -57,7 +57,7 @@ public:
         // 3. evaluate the predicate for the row: Create a row vector with the required columns specified by the index map
         // 4. if the predicate is true, add the row to the output vector (for now just returne the count and leave a todo)
         while (rightCount > 0) {
-
+            tdb_unreachable("Not implemented");
         }
 
         out.setRowCount(totalOutputRows);

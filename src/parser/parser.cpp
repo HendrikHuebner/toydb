@@ -105,28 +105,28 @@ std::unique_ptr<ast::Expression> Parser::parseExpression() {
 
         switch (token.type) {
             case TokenType::OpEquals:
-                condition->op = CmpOp::EQUAL;
+                condition->op = CompareOp::EQUAL;
                 break;
             case TokenType::OpNotEquals:
-                condition->op = CmpOp::NOT_EQUAL;
+                condition->op = CompareOp::NOT_EQUAL;
                 break;
             case TokenType::OpGreaterThan:
-                condition->op = CmpOp::GREATER;
+                condition->op = CompareOp::GREATER;
                 break;
             case TokenType::OpLessThan:
-                condition->op = CmpOp::LESS;
+                condition->op = CompareOp::LESS;
                 break;
             case TokenType::OpGreaterEq:
-                condition->op = CmpOp::GREATER_EQUAL;
+                condition->op = CompareOp::GREATER_EQUAL;
                 break;
             case TokenType::OpLessEq:
-                condition->op = CmpOp::LESS_EQUAL;
+                condition->op = CompareOp::LESS_EQUAL;
                 break;
             case TokenType::OpAnd:
-                condition->op = CmpOp::AND;
+                condition->op = CompareOp::AND;
                 break;
             case TokenType::OpOr:
-                condition->op = CmpOp::OR;
+                condition->op = CompareOp::OR;
                 break;
             default:
                 break;

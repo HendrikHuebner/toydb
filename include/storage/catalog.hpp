@@ -78,13 +78,12 @@ class Catalog {
     Catalog(const Catalog&) = delete;
     Catalog& operator=(const Catalog&) = delete;
 
-    // List table names
     std::vector<std::string> listTables();
 
     // Get table metadata (returns nullopt if not found)
     std::optional<TableMeta> getTable(const std::string& name);
 
-    // Create (register) a table. If exists, returns false.
+    // Create a table. If exists, returns false.
     bool createTable(const TableMeta& meta);
 
     // Drop table; optionally remove files from disk when remove_files=true

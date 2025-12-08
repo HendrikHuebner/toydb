@@ -10,7 +10,7 @@ std::ostream& Table::print(std::ostream& os) const noexcept {
     return os << name;
 }
 
-std::ostream& TableExpression::print(std::ostream& os) const noexcept {
+std::ostream& TableExpr::print(std::ostream& os) const noexcept {
     if (join) {
         if (condition) {
             return os << table << " JOIN " << *join << " ON " << *condition;

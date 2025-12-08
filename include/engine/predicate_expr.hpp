@@ -43,7 +43,7 @@ public:
 
         for (int64_t i = 0; i < buffer.getColumnCount(); ++i) {
             const ColumnBuffer& col = buffer.getColumn(i);
-            [[maybe_unused]] auto it = columnIndexMap_.find(col.columnId_);
+            [[maybe_unused]] auto it = columnIndexMap_.find(col.columnId);
             tdb_assert(it != columnIndexMap_.end(),
                        "Column {} in buffer is not referenced by predicate", col.columnId.getName());
             tdb_assert(static_cast<int64_t>(it->second) == i,
@@ -94,10 +94,13 @@ public:
         return columnIndex_;
     }
 
-
-
     void initializeIndexMap(int32_t* nextIndex = nullptr) override {
-        (void)nextIndex;
+        columnIndex_ = nextIndex ? *nextIndex : 0;
+        columnIndexMap_.clear();
+        columnIndexMap_[columnId_] = columnIndex_;
+        if (nextIndex) {
+            ++(*nextIndex);
+        }
     }
 
     PredicateResultVector evaluate(const RowVectorBuffer& buffer) const override {
@@ -139,9 +142,7 @@ class ConstantExpr : public PredicateExpr {
     };
     std::string stringValue_;
 
-    void initializeIndexMap(int32_t* nextIndex = nullptr) override {
-        // Constants don't reference any columns, so map stays empty
-        (void)nextIndex;
+    void initializeIndexMap([[maybe_unused]] int32_t* nextIndex = nullptr) override {
         columnIndexMap_.clear();
     }
 
@@ -262,7 +263,7 @@ private:
         if (auto* colRef = dynamic_cast<ColumnRefExpr*>(expr)) {
             // ColumnRefExpr stores its index directly
             int32_t colIdx = colRef->getColumnIndex();
-            tdb_assert(colIdx >= 0, "Column index not initialized. Call initialize() first.");
+            tdb_assert(colIdx >= 0, "Column index not initialized. Call initializeIndexMap() first.");
             const ColumnBuffer& col = buffer.getColumn(colIdx);
 
             // Check null bitmap
@@ -273,14 +274,14 @@ private:
 
             // Extract value based on type
             if constexpr (std::is_same_v<T, int64_t>) {
-                if (col.type_ == DataType::getInt64()) {
+                if (col.type == DataType::getInt64()) {
                     int64_t* data = static_cast<int64_t*>(col.data);
                     value = data[rowIndex];
                     isNull = false;
                     return true;
                 }
             } else if constexpr (std::is_same_v<T, double>) {
-                if (col.type_ == DataType::getDouble()) {
+                if (col.type == DataType::getDouble()) {
                     double* data = static_cast<double*>(col.data);
                     value = data[rowIndex];
                     isNull = false;
@@ -365,7 +366,7 @@ public:
 
     PredicateResultVector evaluate(const RowVectorBuffer& buffer) const override {
         assertIndexMapValid(buffer);
-        
+
         int64_t rowCount = buffer.getRowCount();
         PredicateResultVector result(rowCount);
 
@@ -383,6 +384,8 @@ public:
         return evaluateComparison(buffer, rowIndex);
     }
 
+    // Must be called before the predicate is evaluated.
+    // This function initializes the column index map for each operator in the predicate expression.
     void initializeIndexMap(int32_t* nextIndex = nullptr) override {
         int32_t localIndex = 0;
         if (nextIndex == nullptr) {
