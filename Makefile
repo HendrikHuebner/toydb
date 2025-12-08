@@ -58,4 +58,3 @@ test-verbose: build
 test-%: build
 	@echo "Running test: $*"
 	@cd $(BUILD_DIR) && ctest --output-on-failure -R "^$*$$"
-
