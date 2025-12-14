@@ -48,10 +48,46 @@ struct Table : public ASTNode {
 
 struct Expression : public ASTNode {};
 
-struct Literal : public Expression {
+struct Constant : public Expression {
+    virtual ~Constant() = default;
+    virtual std::ostream& print(std::ostream&) const noexcept override = 0;
+};
+
+struct ConstantInt : public Constant {
+    int64_t value;
+    bool isInt64;  // true for int64, false for int32
+
+    ConstantInt(int64_t value, bool isInt64) noexcept : value(value), isInt64(isInt64) {}
+
+    std::ostream& print(std::ostream&) const noexcept override;
+};
+
+struct ConstantDouble : public Constant {
+    double value;
+
+    explicit ConstantDouble(double value) noexcept : value(value) {}
+
+    std::ostream& print(std::ostream&) const noexcept override;
+};
+
+struct ConstantString : public Constant {
     std::string value;
 
-    Literal(const std::string& value) noexcept : value(value) {}
+    explicit ConstantString(const std::string& value) noexcept : value(value) {}
+
+    std::ostream& print(std::ostream&) const noexcept override;
+};
+
+struct ConstantNull : public Constant {
+    ConstantNull() noexcept = default;
+
+    std::ostream& print(std::ostream&) const noexcept override;
+};
+
+struct ConstantBool : public Constant {
+    bool value;
+
+    explicit ConstantBool(bool value) noexcept : value(value) {}
 
     std::ostream& print(std::ostream&) const noexcept override;
 };

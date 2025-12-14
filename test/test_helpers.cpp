@@ -205,21 +205,85 @@ bool compareASTNodes(const toydb::ast::ASTNode* expected, const toydb::ast::ASTN
         return true;
     }
 
-    // Compare Literal nodes
-    if (auto* expLiteral = dynamic_cast<const Literal*>(expected)) {
-        auto* actLiteral = dynamic_cast<const Literal*>(actual);
-        if (!actLiteral) {
-            toydb::Logger::error("AST mismatch at {}: expected Literal but got different type",
+    // Compare ConstantString nodes
+    if (auto* expConstString = dynamic_cast<const ConstantString*>(expected)) {
+        auto* actConstString = dynamic_cast<const ConstantString*>(actual);
+        if (!actConstString) {
+            toydb::Logger::error("AST mismatch at {}: expected ConstantString but got different type",
                                  path);
             return false;
         }
 
-        if (expLiteral->value != actLiteral->value) {
+        if (expConstString->value != actConstString->value) {
             toydb::Logger::error("AST mismatch at {}.value: expected '{}' but got '{}'", path,
-                                 expLiteral->value, actLiteral->value);
+                                 expConstString->value, actConstString->value);
             return false;
         }
 
+        return true;
+    }
+
+    // Compare ConstantInt nodes
+    if (auto* expConstInt = dynamic_cast<const ConstantInt*>(expected)) {
+        auto* actConstInt = dynamic_cast<const ConstantInt*>(actual);
+        if (!actConstInt) {
+            toydb::Logger::error("AST mismatch at {}: expected ConstantInt but got different type",
+                                 path);
+            return false;
+        }
+
+        if (expConstInt->value != actConstInt->value || expConstInt->isInt64 != actConstInt->isInt64) {
+            toydb::Logger::error("AST mismatch at {}.value: expected {} (isInt64: {}) but got {} (isInt64: {})", path,
+                                 expConstInt->value, expConstInt->isInt64, actConstInt->value, actConstInt->isInt64);
+            return false;
+        }
+
+        return true;
+    }
+
+    // Compare ConstantDouble nodes
+    if (auto* expConstDouble = dynamic_cast<const ConstantDouble*>(expected)) {
+        auto* actConstDouble = dynamic_cast<const ConstantDouble*>(actual);
+        if (!actConstDouble) {
+            toydb::Logger::error("AST mismatch at {}: expected ConstantDouble but got different type",
+                                 path);
+            return false;
+        }
+
+        if (expConstDouble->value != actConstDouble->value) {
+            toydb::Logger::error("AST mismatch at {}.value: expected {} but got {}", path,
+                                 expConstDouble->value, actConstDouble->value);
+            return false;
+        }
+
+        return true;
+    }
+
+    // Compare ConstantBool nodes
+    if (auto* expConstBool = dynamic_cast<const ConstantBool*>(expected)) {
+        auto* actConstBool = dynamic_cast<const ConstantBool*>(actual);
+        if (!actConstBool) {
+            toydb::Logger::error("AST mismatch at {}: expected ConstantBool but got different type",
+                                 path);
+            return false;
+        }
+
+        if (expConstBool->value != actConstBool->value) {
+            toydb::Logger::error("AST mismatch at {}.value: expected {} but got {}", path,
+                                 expConstBool->value, actConstBool->value);
+            return false;
+        }
+
+        return true;
+    }
+
+    // Compare ConstantNull nodes
+    if (dynamic_cast<const ConstantNull*>(expected)) {
+        if (!dynamic_cast<const ConstantNull*>(actual)) {
+            toydb::Logger::error("AST mismatch at {}: expected ConstantNull but got different type",
+                                 path);
+            return false;
+        }
         return true;
     }
 

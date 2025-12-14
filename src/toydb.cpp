@@ -8,5 +8,5 @@
 #include "engine/nested_loop_join.hpp"
 
 void foo() {
-    toydb::ast::Literal l("foo");
+    toydb::ast::ConstantString l("foo");
 }

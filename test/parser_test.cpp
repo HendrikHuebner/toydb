@@ -44,8 +44,8 @@ class ParserTest : public ::testing::Test {
     }
 
     // Helper functions to create AST nodes
-    std::unique_ptr<Literal> makeLiteral(const std::string& value) {
-        return std::make_unique<Literal>(value);
+    std::unique_ptr<ConstantString> makeLiteral(const std::string& value) {
+        return std::make_unique<ConstantString>(value);
     }
 
     std::vector<std::unique_ptr<Expression>> makeRow(std::initializer_list<std::string> values) {

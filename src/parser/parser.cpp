@@ -161,10 +161,30 @@ std::unique_ptr<ast::Expression> Parser::parseTerm() {
     auto token = ts.next();
 
     if (token.type == TokenType::IdentifierType) {
-        return std::make_unique<ast::Literal>(token.lexeme);
+        // This should probably not be reached.
+        Logger::warn("Parsing identifier as string constant: {}", token.getString());
+        return std::make_unique<ast::ConstantString>(token.getString());
 
-    } else if (token.type == TokenType::IntLiteral || token.type == TokenType::StringLiteral) {
-        return std::make_unique<ast::Literal>(token.lexeme);
+    } else if (token.type == TokenType::Int32Literal) {
+        return std::make_unique<ast::ConstantInt>(token.getInt(), false);
+
+    } else if (token.type == TokenType::Int64Literal) {
+        return std::make_unique<ast::ConstantInt>(token.getInt(), true);
+
+    } else if (token.type == TokenType::DoubleLiteral) {
+        return std::make_unique<ast::ConstantDouble>(token.getDouble());
+
+    } else if (token.type == TokenType::StringLiteral) {
+        return std::make_unique<ast::ConstantString>(token.getString());
+
+    } else if (token.type == TokenType::NullLiteral) {
+        return std::make_unique<ast::ConstantNull>();
+
+    } else if (token.type == TokenType::TrueLiteral) {
+        return std::make_unique<ast::ConstantBool>(token.getBool());
+
+    } else if (token.type == TokenType::FalseLiteral) {
+        return std::make_unique<ast::ConstantBool>(token.getBool());
 
     } else if (token.type == TokenType::ParenthesisL) {
         auto&& result = parseExpression();
@@ -213,14 +233,14 @@ std::unique_ptr<ast::CreateTable> Parser::parseCreateTable() {
     expectToken(TokenType::KeyTable, "TABLE statement");
 
     auto token = parseIdentifier("table name");
-    auto tableName = token.lexeme;
+    auto tableName = token.getString();
     auto createTable = std::make_unique<ast::CreateTable>(tableName);
 
     expectToken(TokenType::ParenthesisL, "column definition list");
 
     while (ts.peek().type != TokenType::ParenthesisR) {
-        token = parseIdentifier("column name");
-        std::string colName = token.lexeme;
+            token = parseIdentifier("column name");
+            std::string colName = token.getString();
 
         token = ts.next();
         auto colType = parseDataType(token, ts.getCurrentLineNumber(), ts.getLinePosition());
@@ -251,7 +271,7 @@ std::unique_ptr<ast::Insert> Parser::parseInsertInto() {
     expectToken(TokenType::KeyInto, "INTO statement");
 
     auto token = parseIdentifier("table name");
-    auto tableName = token.lexeme;
+    auto tableName = token.getString();
     auto insert = std::make_unique<ast::Insert>(tableName);
 
     // column list
@@ -266,7 +286,7 @@ std::unique_ptr<ast::Insert> Parser::parseInsertInto() {
             first = false;
 
             token = parseIdentifier("column name");
-            insert->columnNames.push_back(token.lexeme);
+            insert->columnNames.push_back(token.getString());
         }
         expectToken(TokenType::ParenthesisR, "column list");
     }
@@ -326,7 +346,7 @@ std::unique_ptr<ast::Update> Parser::parseUpdate() {
                               ts.getCurrentLineNumber(), ts.getLinePosition());
     }
 
-    auto tableName = token.lexeme;
+    auto tableName = token.getString();
     auto update = std::make_unique<ast::Update>(tableName);
 
     expectToken(TokenType::KeySet, "SET statement");
@@ -343,7 +363,7 @@ std::unique_ptr<ast::Update> Parser::parseUpdate() {
         first = false;
 
         token = parseIdentifier("column name");
-        auto colName = token.lexeme;
+        auto colName = token.getString();
 
         expectToken(TokenType::OpEquals, "assignment in UPDATE statement");
 
@@ -367,7 +387,7 @@ std::unique_ptr<ast::Delete> Parser::parseDeleteFrom() {
     expectToken(TokenType::KeyFrom, "FROM statement");
 
     auto token = parseIdentifier("table name");
-    auto tableName = token.lexeme;
+    auto tableName = token.getString();
     auto deleteFrom = std::make_unique<ast::Delete>(tableName);
 
     deleteFrom->where = parseWhere();
@@ -405,7 +425,6 @@ std::expected<std::unique_ptr<ast::QueryAST>, std::string> Parser::parseQuery() 
         getLogger().info("Query parsing failed: {}", e.what());
         return std::unexpected(e.what());
     }
-
     if (ts.peek().type == TokenType::EndOfStatement) {
         ts.next();
     }

@@ -3,8 +3,10 @@
 #include <cassert>
 #include <cctype>
 #include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <string>
+#include <variant>
 #include <expected>
 
 namespace toydb {
@@ -13,7 +15,9 @@ namespace parser {
 
 enum class TokenType {
     IdentifierType,
-    IntLiteral,
+    Int32Literal,
+    Int64Literal,
+    DoubleLiteral,
     TrueLiteral,
     FalseLiteral,
     StringLiteral,
@@ -60,13 +64,21 @@ enum class TokenType {
 };
 
 struct Token {
+    using TokenValue = std::variant<std::monostate, std::string, int64_t, double>;
 
     TokenType type;
-    std::string lexeme;
+    TokenValue value;
 
-    Token(TokenType type = TokenType::Unknown) : type(type), lexeme("") {}
-    Token(TokenType type, const std::string& lexeme) : type(type), lexeme(lexeme) {}
-    Token(TokenType type, std::string&& lexeme) : type(type), lexeme(std::move(lexeme)) {}
+    Token(TokenType type = TokenType::Unknown) : type(type), value(std::monostate{}) {}
+    Token(TokenType type, const std::string& str) : type(type), value(str) {}
+    Token(TokenType type, std::string&& str) : type(type), value(std::move(str)) {}
+    Token(TokenType type, int64_t val) : type(type), value(val) {}
+    Token(TokenType type, double val) : type(type), value(val) {}
+
+    std::string getString() const;
+    int64_t getInt() const;
+    double getDouble() const;
+    bool getBool() const;
 
     std::string toString() const noexcept;
 };
@@ -74,7 +86,7 @@ struct Token {
 
 /**
  * @brief Tokenizes a query. The next Token can be peeked/popped similar to a stack.
- * 
+ *
  */
 class TokenStream {
 
@@ -93,15 +105,15 @@ class TokenStream {
 
     /**
      * @brief Returns next token in query and moves to the next token
-     * 
-     * @return Token 
+     *
+     * @return Token
      */
     [[maybe_unused]] Token next() noexcept;
 
     /**
     * @brief Returns next token in query without moving to the next token
-    * 
-    * @return Token 
+    *
+    * @return Token
     */
     Token peek() noexcept;
 

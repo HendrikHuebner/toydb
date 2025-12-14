@@ -61,6 +61,10 @@ class DataType {
 
     Type getType() const noexcept { return type_; }
 
+    bool isIntegral() const noexcept {
+        return type_ == Type::INT32 || type_ == Type::INT64 || type_ == Type::BOOL;
+    }
+
     int32_t getSize() const noexcept {
         switch (type_) {
             case Type::INT32:

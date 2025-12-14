@@ -1,8 +1,13 @@
 #include <algorithm>
 #include <cctype>
+#include <climits>
 #include <cstdlib>
+#include <limits>
 #include <optional>
+#include <sstream>
 #include <unordered_map>
+#include "common/assert.hpp"
+#include "common/logging.hpp"
 
 #include "parser/lexer.hpp"
 
@@ -232,7 +237,14 @@ Token TokenStream::lexWord() noexcept {
     std::string lexeme { query.substr(start, position - start) };
 
     if (keywords.find(lexeme) != keywords.end()) {
-        return { keywords.at(lexeme) };
+        TokenType keywordType = keywords.at(lexeme);
+        if (keywordType == TokenType::TrueLiteral) {
+            return {TokenType::TrueLiteral, static_cast<int64_t>(1)};
+        } else if (keywordType == TokenType::FalseLiteral) {
+            return {TokenType::FalseLiteral, static_cast<int64_t>(0)};
+        } else {
+            return {keywordType};
+        }
     }
 
     return {TokenType::IdentifierType, std::move(lexeme) };
@@ -260,19 +272,59 @@ Token TokenStream::lexString() noexcept {
     return { TokenType::StringLiteral, lexeme };
 }
 
+/**
+ * @brief Lexes a number as either a double (if containing a deximal point)
+ * or the smallestest type of int32/int64 that can fit the number
+ *
+ * TODO: Handle literals in scientific notation, perhaps support literal suffixes like 'L' for long literals?
+ */
 Token TokenStream::lexNumber() noexcept {
     size_t start = position;
+    bool hasDecimal = false;
 
+    // Parse integer part
     while (position < query.size()) {
         char c = query[position];
         if (std::isdigit(c)) {
             ++position;
+        } else if (c == '.' && position + 1 < query.size() && std::isdigit(query[position + 1])) {
+            hasDecimal = true;
+            ++position;
+            // Parse fractional part
+            while (position < query.size() && std::isdigit(query[position])) {
+                ++position;
+            }
+            break;
         } else {
             break;
         }
     }
 
-    return {TokenType::IntLiteral, std::string(query.substr(start, position - start))};
+    std::string lexeme = std::string(query.substr(start, position - start));
+    
+    if (hasDecimal) {
+        try {
+            double value = std::stod(lexeme);
+            return {TokenType::DoubleLiteral, value};
+        } catch (const std::exception& e) {
+            Logger::error("Error parsing double: {}", e.what());
+            return {TokenType::Unknown};
+        }
+    } else {
+        // Check if it fits in int32 range
+        try {
+            int64_t value = std::stoll(lexeme);
+            if (value >= std::numeric_limits<int32_t>::min() &&
+                value <= std::numeric_limits<int32_t>::max()) {
+                return Token(TokenType::Int32Literal, value);
+            } else {
+                return Token(TokenType::Int64Literal, value);
+            }
+        } catch (const std::exception& e) {
+            Logger::error("Error parsing number: {}", e.what());
+            return {TokenType::Unknown};
+        }
+    }
 }
 
 Token TokenStream::lexPunctuationChar() noexcept {
@@ -283,6 +335,26 @@ Token TokenStream::lexPunctuationChar() noexcept {
         case ',': return TokenType::Comma;
         default: return TokenType::Unknown;
     }
+}
+
+std::string Token::getString() const {
+    tdb_assert(std::holds_alternative<std::string>(value), "Token value is not a string");
+    return std::get<std::string>(value);
+}
+
+int64_t Token::getInt() const {
+    tdb_assert(std::holds_alternative<int64_t>(value), "Token value is not an integer");
+    return std::get<int64_t>(value);
+}
+
+double Token::getDouble() const {
+    tdb_assert(std::holds_alternative<double>(value), "Token value is not a double");
+    return std::get<double>(value);
+}
+
+bool Token::getBool() const {
+    tdb_assert(std::holds_alternative<int64_t>(value), "Token value is not an integer (bool)");
+    return std::get<int64_t>(value) != 0;
 }
 
 std::string Token::toString() const noexcept {
@@ -321,9 +393,21 @@ std::string Token::toString() const noexcept {
         case TokenType::Asterisk: return "*";
 
         case TokenType::IdentifierType:
-        case TokenType::IntLiteral:
-        case TokenType::StringLiteral: 
-            return lexeme;
+        case TokenType::StringLiteral:
+            return getString();
+
+        case TokenType::Int32Literal:
+        case TokenType::Int64Literal: {
+            std::ostringstream oss;
+            oss << getInt();
+            return oss.str();
+        }
+
+        case TokenType::DoubleLiteral: {
+            std::ostringstream oss;
+            oss << getDouble();
+            return oss.str();
+        }
 
         case TokenType::EndOfFile: return "<EOF>";
         case TokenType::Unknown: return "<UNKNOWN>";

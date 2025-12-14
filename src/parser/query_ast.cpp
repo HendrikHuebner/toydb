@@ -26,9 +26,25 @@ std::ostream& Column::print(std::ostream& os) const noexcept {
     return os << name;
 }
 
-std::ostream& Literal::print(std::ostream& os) const noexcept {
+std::ostream& ConstantInt::print(std::ostream& os) const noexcept {
     return os << value;
-};
+}
+
+std::ostream& ConstantDouble::print(std::ostream& os) const noexcept {
+    return os << value;
+}
+
+std::ostream& ConstantString::print(std::ostream& os) const noexcept {
+    return os << "'" << value << "'";
+}
+
+std::ostream& ConstantNull::print(std::ostream& os) const noexcept {
+    return os << "NULL";
+}
+
+std::ostream& ConstantBool::print(std::ostream& os) const noexcept {
+    return os << (value ? "TRUE" : "FALSE");
+}
 
 std::ostream& Condition::print(std::ostream& os) const noexcept {
     if (isUnop()) {

@@ -33,28 +33,13 @@ class SQLInterpreter {
    private:
     PlaceholderCatalog* catalog_;
 
-    std::unique_ptr<PredicateExpr> convertExpression(const ast::Expression* expr,
-                                                     const std::string& tableName);
-
-    std::unique_ptr<PredicateExpr> convertLiteral(const ast::Literal* literal);
-
-    std::unique_ptr<PredicateExpr> convertCondition(const ast::Condition* condition,
-                                                    const std::string& tableName);
-
-    // Helper to resolve column name to ColumnId
     ColumnId resolveColumnName(const std::string& columnName, const std::string& tableName);
 
-    // Helper to parse literal value and determine its type
-    DataType inferLiteralType(const std::string& value);
+    std::unique_ptr<PredicateExpr> lowerConstant(const ast::Constant* constant);
 
-    // Helper to parse integer from string
-    std::optional<int64_t> parseInteger(const std::string& value);
+    std::unique_ptr<PredicateExpr> lowerPredicate(const ast::Expression* expr, const std::string& tableName);
 
-    // Helper to parse double from string
-    std::optional<double> parseDouble(const std::string& value);
-
-    // Helper to parse boolean from string
-    std::optional<bool> parseBoolean(const std::string& value);
+    std::unique_ptr<PredicateExpr> lowerCondition(const ast::Condition* condition, const std::string& tableName);
 
    public:
     explicit SQLInterpreter(PlaceholderCatalog* catalog) : catalog_(catalog) {}
@@ -89,4 +74,3 @@ class SQLInterpreter {
 };
 
 }  // namespace toydb
-
