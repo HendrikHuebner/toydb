@@ -33,7 +33,7 @@ if (ENABLE_ASAN)
 endif()
 
 target_include_directories(toydb PUBLIC ./include)
-target_link_libraries(toydb PRIVATE spdlog fmt::fmt arrow parquet nlohmann_json::nlohmann_json)
+target_link_libraries(toydb PRIVATE spdlog::spdlog fmt::fmt arrow parquet nlohmann_json::nlohmann_json)
 
 target_compile_options(toydb PRIVATE
     -Wall -Wextra -Wpedantic -Werror -Wno-gnu-zero-variadic-macro-arguments
