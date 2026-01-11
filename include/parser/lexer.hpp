@@ -60,7 +60,7 @@ enum class TokenType {
     ParenthesisR,
     Comma,
 
-    Unknown
+    Unknown = 666,
 };
 
 struct Token {

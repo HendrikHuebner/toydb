@@ -101,12 +101,20 @@ Token TokenStream::next() noexcept {
     switch (charType) {
         case CharType::A: token = lexWord(); break;
         case CharType::N: token = lexNumber(); break;
-        case CharType::O: token = lexOperator(); break;
+        case CharType::O: {
+            // Minus sign could either be negative number or minus binop / unop
+            if (c.value() == '-' && position + 1 < query.size() && std::isdigit(query[position + 1])) {
+                token = lexNumber();
+            } else {
+                token = lexOperator();
+            }
+            break;
+        }
         case CharType::S: token = lexString(); break;
         case CharType::P: token = lexPunctuationChar(); break;
         default: {
             position++;
-            return TokenType::Unknown;
+            return Token{TokenType::Unknown};
         }
     }
 
@@ -281,6 +289,11 @@ Token TokenStream::lexString() noexcept {
 Token TokenStream::lexNumber() noexcept {
     size_t start = position;
     bool hasDecimal = false;
+
+    // Check for leading minus sign
+    if (position < query.size() && query[position] == '-') {
+        ++position;
+    }
 
     // Parse integer part
     while (position < query.size()) {
