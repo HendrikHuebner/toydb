@@ -3,6 +3,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include "parser/query_ast.hpp"
 #include "planner/logical_operator.hpp"
 #include "storage/catalog.hpp"
@@ -18,12 +19,35 @@ class PlaceholderCatalog {
 
     /**
      * @brief Resolve a column name to a ColumnId
-     * @param tableName Table name (empty if not qualified)
-     * @param columnName Column name
-     * @return ColumnId if found, nullopt otherwise
      */
     virtual std::optional<ColumnId> resolveColumn(const std::string& tableName,
                                                   const std::string& columnName) = 0;
+
+    /**
+     * @brief Get the DataType for a column from its ColumnId
+     */
+    virtual std::optional<DataType> getColumnType(const ColumnId& columnId) = 0;
+};
+
+struct QueryContext {
+    // Map: alias -> actual table name
+    std::unordered_map<std::string, std::string> aliasToTable;
+
+    // Map: table name -> TableMeta
+    std::unordered_map<std::string, TableMeta> tables;
+
+    std::optional<std::string> getCanonicalTableName(const std::string& tableOrAlias) const {
+        auto aliasIt = aliasToTable.find(tableOrAlias);
+        if (aliasIt != aliasToTable.end()) {
+            return aliasIt->second;
+        }
+
+        if (tables.find(tableOrAlias) != tables.end()) {
+            return tableOrAlias;
+        }
+
+        return std::nullopt;
+    }
 };
 
 /**
@@ -33,13 +57,13 @@ class SQLInterpreter {
    private:
     PlaceholderCatalog* catalog_;
 
-    ColumnId resolveColumnName(const std::string& columnName, const std::string& tableName);
+    ColumnId resolveColumnRef(const ast::ColumnRef& columnRef, const QueryContext& context);
 
     std::unique_ptr<PredicateExpr> lowerConstant(const ast::Constant* constant);
 
-    std::unique_ptr<PredicateExpr> lowerPredicate(const ast::Expression* expr, const std::string& tableName);
+    std::unique_ptr<PredicateExpr> lowerPredicate(const ast::Expression* expr, const QueryContext& context);
 
-    std::unique_ptr<PredicateExpr> lowerCondition(const ast::Condition* condition, const std::string& tableName);
+    std::unique_ptr<PredicateExpr> lowerCondition(const ast::Condition* condition, const QueryContext& context);
 
    public:
     explicit SQLInterpreter(PlaceholderCatalog* catalog) : catalog_(catalog) {}

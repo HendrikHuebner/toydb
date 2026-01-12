@@ -6,52 +6,82 @@
 
 namespace toydb {
 
-/**
- * @brief Resolve a column name to a column id by looking it up in the catalog.
- *
- * @throws std::runtime_error if the column is not found
- */
-ColumnId SQLInterpreter::resolveColumnName(const std::string& columnName, const std::string& tableName) {
-    auto colId = catalog_->resolveColumn(tableName, columnName);
-    if (!colId.has_value()) {
-        std::string error = "Column '" + columnName + "'";
-        if (!tableName.empty()) {
-            error += " in table '" + tableName + "'";
+static QueryContext buildSelectContext(const ast::SelectFrom& selectFrom, PlaceholderCatalog* catalog) {
+    QueryContext context;
+
+    for (const auto& tableExpr : selectFrom.tables) {
+        const std::string& tableName = tableExpr.table.name;
+        const std::string& tableAlias = tableExpr.table.alias;
+
+        auto tableMeta = catalog->getTable(tableName);
+        if (!tableMeta.has_value()) {
+            throw std::runtime_error("Table '" + tableName + "' not found");
         }
-        error += " not found";
-        throw std::runtime_error(error);
+
+        context.tables[tableName] = *tableMeta;
+
+        if (!tableAlias.empty()) {
+            if (context.aliasToTable.find(tableAlias) != context.aliasToTable.end()) {
+                throw std::runtime_error("Duplicate alias '" + tableAlias + "'");
+            }
+            context.aliasToTable[tableAlias] = tableName;
+        }
+
+        // TODO: Handle nested joins
     }
-    return *colId;
+
+    return context;
 }
 
-/**
- * @brief Get the DataType for a column by looking it up in the catalog.
- *
- * @throws std::runtime_error if the table or column is not found
- */
-static DataType getColumnType(const std::string& columnName, const std::string& tableName, PlaceholderCatalog* catalog) {
-    auto tableMeta = catalog->getTable(tableName);
-    if (!tableMeta.has_value()) {
-        throw std::runtime_error("Table '" + tableName + "' not found");
+ColumnId SQLInterpreter::resolveColumnRef(const ast::ColumnRef& columnRef, const QueryContext& context) {
+    const std::string& columnName = columnRef.name;
+    const std::string& tableQualifier = columnRef.table;
+
+    // Qualified reference (table.column or alias.column)
+    if (!tableQualifier.empty()) {
+        auto actualTableName = context.getCanonicalTableName(tableQualifier);
+        if (!actualTableName.has_value()) {
+            throw std::runtime_error("Table or alias '" + tableQualifier + "' not found");
+        }
+
+        auto columnId = catalog_->resolveColumn(*actualTableName, columnName);
+        if (!columnId.has_value()) {
+            throw std::runtime_error("Column '" + columnName + "' not found in table '" + *actualTableName + "'");
+        }
+
+        return *columnId;
     }
-    for (const auto& colMeta : tableMeta->schema) {
-        if (colMeta.name == columnName) {
-            if (colMeta.type == "INT64") {
-                return DataType::getInt64();
-            } else if (colMeta.type == "INT32") {
-                return DataType::getInt32();
-            } else if (colMeta.type == "DOUBLE") {
-                return DataType::getDouble();
-            } else if (colMeta.type == "BOOL") {
-                return DataType::getBool();
-            } else if (colMeta.type == "STRING") {
-                return DataType::getString();
-            } else {
-                throw std::runtime_error("Unknown column type: " + colMeta.type);
-            }
+
+    // Unqualified reference
+    std::vector<std::string> matchingTables;
+
+    for (const auto& [tableName, tableMeta] : context.tables) {
+        if (tableMeta.hasColumn(columnName)) {
+            matchingTables.push_back(tableName);
         }
     }
-    throw std::runtime_error("Column '" + columnName + "' not found in table '" + tableName + "'");
+
+    if (matchingTables.empty()) {
+        throw std::runtime_error("Column '" + columnName + "' not found in any available table");
+    }
+
+    if (matchingTables.size() > 1) {
+        std::string error = "Column '" + columnName + "' is ambiguous: found in tables ";
+        for (size_t i = 0; i < matchingTables.size(); ++i) {
+            if (i > 0) error += ", ";
+            error += matchingTables[i];
+        }
+        throw std::runtime_error(error);
+    }
+
+    // Exactly one match
+    const std::string& actualTableName = matchingTables[0];
+    auto columnId = catalog_->resolveColumn(actualTableName, columnName);
+    if (!columnId.has_value()) {
+        throw std::runtime_error("Column '" + columnName + "' not found in table '" + actualTableName + "'");
+    }
+
+    return *columnId;
 }
 
 std::unique_ptr<PredicateExpr> SQLInterpreter::lowerConstant(const ast::Constant* constant) {
@@ -73,18 +103,21 @@ std::unique_ptr<PredicateExpr> SQLInterpreter::lowerConstant(const ast::Constant
 }
 
 // Helper to convert AST Expression to PredicateExpr
-std::unique_ptr<PredicateExpr> SQLInterpreter::lowerPredicate(const ast::Expression* expr, const std::string& tableName) {
+std::unique_ptr<PredicateExpr> SQLInterpreter::lowerPredicate(const ast::Expression* expr, const QueryContext& context) {
     if (auto* columnRef = dynamic_cast<const ast::ColumnRef*>(expr)) {
-        ColumnId colId = resolveColumnName(columnRef->name, tableName);
-        DataType colType = getColumnType(columnRef->name, tableName, catalog_);
-        return std::make_unique<ColumnRefExpr>(colId, colType);
+        ColumnId colId = resolveColumnRef(*columnRef, context);
+        auto colType = catalog_->getColumnType(colId);
+        if (!colType.has_value()) {
+            throw std::runtime_error("Could not determine type for column: " + colId.getName());
+        }
+        return std::make_unique<ColumnRefExpr>(colId, *colType);
     } else if (auto* constant = dynamic_cast<const ast::Constant*>(expr)) {
         if (auto* constString = dynamic_cast<const ast::ConstantString*>(constant)) {
             throw std::runtime_error("Unexpected string literal in predicate: " + constString->value);
         }
         return lowerConstant(constant);
     } else if (auto* condition = dynamic_cast<const ast::Condition*>(expr)) {
-        return lowerCondition(condition, tableName);
+        return lowerCondition(condition, context);
     } else {
         throw std::runtime_error("Unsupported expression type in WHERE clause");
     }
@@ -119,14 +152,14 @@ static DataType getCommonType(const DataType& left, const DataType& right) {
     }
 }
 
-std::unique_ptr<PredicateExpr> SQLInterpreter::lowerCondition(const ast::Condition* condition, const std::string& tableName) {
+std::unique_ptr<PredicateExpr> SQLInterpreter::lowerCondition(const ast::Condition* condition, const QueryContext& context) {
     if (condition->isUnop()) {
         throw std::runtime_error("unary operator is NYI");
     }
 
     // Binary operator
-    auto left = lowerPredicate(condition->left.get(), tableName);
-    auto right = lowerPredicate(condition->right.get(), tableName);
+    auto left = lowerPredicate(condition->left.get(), context);
+    auto right = lowerPredicate(condition->right.get(), context);
 
     if (condition->op == CompareOp::AND || condition->op == CompareOp::OR) {
         return std::make_unique<LogicalExpr>(condition->op, std::move(left), std::move(right));
@@ -212,32 +245,44 @@ LogicalQueryPlan SQLInterpreter::handleSelectFrom(const ast::SelectFrom& selectF
         throw std::runtime_error("Multiple tables (joins) not yet supported");
     }
 
-    // Get the table name
-    const auto& tableExpr = selectFrom.tables[0];
-    std::string tableName = tableExpr.table.name;
+    QueryContext context = buildSelectContext(selectFrom, catalog_);
 
-    auto tableMeta = catalog_->getTable(tableName);
-    if (!tableMeta.has_value()) {
-        throw std::runtime_error("Table '" + tableName + "' not found");
+    // Collect all columns for TableScanOp
+    std::vector<ColumnId> scanColumns;
+    for (const auto& [tblName, tableMeta] : context.tables) {
+        for (const auto& colMeta : tableMeta.schema) {
+            auto colId = catalog_->resolveColumn(tblName, colMeta.name);
+            if (colId.has_value()) {
+                scanColumns.push_back(*colId);
+            } else {
+                throw std::runtime_error("Could no resolve column: " + colMeta.name);
+            }
+        }
     }
 
     // Create TableScanOp as the base of the query plan
-    auto tableScanOp = std::make_shared<TableScanOp>(tableName);
+    auto tableScanOp = std::make_shared<TableScanOp>(std::move(scanColumns));
     std::shared_ptr<LogicalOperator> current = tableScanOp;
 
     // Add filter if WHERE clause exists
     if (selectFrom.where) {
-        auto predicate = lowerPredicate(selectFrom.where.get(), tableName);
+        auto predicate = lowerPredicate(selectFrom.where.get(), context);
         auto filterOp = std::make_shared<FilterOp>(std::move(predicate));
         filterOp->addChild(current);
         current = filterOp;
+    }
+
+    if (selectFrom.selectAll) {
+        LogicalQueryPlan plan;
+        plan.setRoot(current);
+        return plan;
     }
 
     // Add projection for selected columns
     std::vector<ColumnId> projectionColumns;
     for (const auto& col : selectFrom.columns) {
         try {
-            ColumnId colId = resolveColumnName(col.name, tableName);
+            ColumnId colId = resolveColumnRef(col, context);
             projectionColumns.push_back(colId);
         } catch (const std::exception& e) {
             Logger::error("Interpretation failed: {}", e.what());

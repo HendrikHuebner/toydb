@@ -7,6 +7,7 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include "common/types.hpp"
 
 namespace toydb {
 
@@ -56,10 +57,19 @@ std::optional<StorageFormat> storageFormatFromString(const std::string& s) noexc
 
 struct TableMeta {
     std::string name;
-    std::string id;
+    TableId id;
     StorageFormat format;
     std::vector<ColumnMeta> schema;
     std::vector<FileEntry> files;
+
+    bool hasColumn(const std::string& columnName) const noexcept {
+        for (const auto& colMeta : schema) {
+            if (colMeta.name == columnName) {
+                return true;
+            }
+        }
+        return false;
+    }
 
     json to_json() const;
 
@@ -93,7 +103,7 @@ class Catalog {
     bool addFiles(const std::string& tableName, const std::vector<FileEntry>& newFiles);
 
     bool discoverDirectoryAsTable(const std::string& table_name, const fs::path& dir,
-                                     StorageFormat format = StorageFormat::PARQUET);
+                                  StorageFormat format = StorageFormat::PARQUET);
 
     // Update table schema (e.g., after an ALTER or after inspecting a parquet file)
     bool updateSchema(const std::string& table_name, const std::vector<ColumnMeta>& schema);
@@ -107,7 +117,7 @@ class Catalog {
     std::mutex mutex;
     std::unordered_map<std::string, TableMeta> tables;
 
-    static std::string makeId(const std::string& name) noexcept;
+    static TableId makeId(const std::string& name) noexcept;
 
     // Persist atomically: write tmp and rename
     void persist_atomic();

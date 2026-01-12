@@ -41,9 +41,11 @@ std::optional<StorageFormat> storageFormatFromString(const std::string& s) noexc
     }
 };
 
-std::string Catalog::makeId(const std::string& name) noexcept {
-    // TODO
-    return name;
+TableId Catalog::makeId(const std::string& name) noexcept {
+    // For now just take the hash of the name
+    std::hash<std::string> hasher;
+    uint64_t id = static_cast<uint64_t>(hasher(name));
+    return TableId{id, name};
 }
 
 std::vector<std::string> Catalog::listTables() {
@@ -220,7 +222,8 @@ bool Catalog::loadOrCreate() {
 json TableMeta::to_json() const {
     json obj;
     obj["name"] = name;
-    obj["id"] = id;
+    obj["id"] = id.getId();
+    obj["id_name"] = id.getName();
     obj["format"] = storageFormatToString(format);
     obj["schema"] = json::array();
     for (auto& c : schema)
@@ -234,7 +237,9 @@ json TableMeta::to_json() const {
 TableMeta TableMeta::from_json(const json& obj) {
     TableMeta table;
     table.name = obj.at("name").get<std::string>();
-    table.id = obj.at("id").get<std::string>();
+    uint64_t idValue = obj.at("id").get<uint64_t>();
+    std::string idName = obj.at("id_name").get<std::string>();
+    table.id = TableId(idValue, idName);
     auto formatOpt = storageFormatFromString(obj.at("format").get<std::string>());
     if (!formatOpt)
         throw std::runtime_error("Invalid format while parsing table metadata");

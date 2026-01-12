@@ -83,11 +83,17 @@ struct ConstantBool : public Constant {
 
 struct ColumnRef : public Expression {
     std::string name;
-    std::string alias;
+    std::string table;  // Table name or alias (e.g., "table.column" -> "table")
+    std::string alias;  // Column alias
 
     explicit ColumnRef(const std::string& name) noexcept : name(name) {}
 
     ColumnRef(const std::string& name, const std::string& alias) noexcept : name(name), alias(alias) {}
+
+    ColumnRef(const std::string& table, const std::string& name, const std::string& alias)
+        noexcept : name(name), table(table), alias(alias) {}
+
+    bool isQualified() const noexcept { return !table.empty(); }
 
     std::ostream& print(std::ostream&) const noexcept override;
 };

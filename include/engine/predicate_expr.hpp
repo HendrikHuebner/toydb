@@ -50,7 +50,7 @@ public:
         tdb_assert(static_cast<int64_t>(columnIndexMap_.size()) <= buffer.getColumnCount(),
                    "Buffer column count mismatch: expected at most {}, got {}", columnIndexMap_.size(), buffer.getColumnCount());
         for (const auto& [colId, idx] : columnIndexMap_) {
-            const ColumnBuffer& col = buffer.getColumn(idx);
+            [[maybe_unused]] const ColumnBuffer& col = buffer.getColumn(idx);
             tdb_assert(col.columnId == colId, "Column index mismatch: expected column ID {} but got {}", colId, col.columnId);
         }
     }
@@ -59,18 +59,11 @@ public:
 
     /**
      * @brief Evaluate the predicate over a row buffer
-     *
-     * @param buffer Row buffer to evaluate against
-     * @return PredicateResult with evaluation results for each row
      */
     virtual PredicateResultVector evaluate(const RowVectorBuffer& buffer) const = 0;
 
     /**
      * @brief Evaluate predicate for a single row (tuple-by-tuple)
-     *
-     * @param buffer Row buffer
-     * @param rowIndex Index of the row to evaluate
-     * @return PredicateValue for this row
      */
     virtual PredicateValue evaluateRow(
         const RowVectorBuffer& buffer,

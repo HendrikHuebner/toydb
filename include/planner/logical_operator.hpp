@@ -320,18 +320,35 @@ public:
 
 class TableScanOp : public LogicalOperator {
 private:
-    std::string tableName_;
+    std::vector<ColumnId> columns_;
 
 public:
-    explicit TableScanOp(std::string tableName)
-        : tableName_(std::move(tableName)) {}
+    explicit TableScanOp(std::vector<ColumnId> columns)
+        : columns_(std::move(columns)) {
+        // Verify all columns belong to the same table
+        if (!columns_.empty()) {
+            const TableId& firstTableId = columns_[0].getTableId();
+            for (size_t i = 1; i < columns_.size(); ++i) {
+                if (columns_[i].getTableId() != firstTableId) {
+                    throw std::runtime_error("TableScanOp: columns must belong to the same table");
+                }
+            }
+        }
+    }
 
-    const std::string& getTableName() const noexcept {
-        return tableName_;
+    const std::vector<ColumnId>& getColumns() const noexcept {
+        return columns_;
     }
 
     std::ostream& print(std::ostream& os) const override {
-        os << "TableScan[" << tableName_ << "]";
+        os << "TableScan[";
+        if (!columns_.empty()) {
+            os << columns_[0].getTableId().getName();
+            if (columns_.size() > 1) {
+                os << " (" << columns_.size() << " columns)";
+            }
+        }
+        os << "]";
         return os;
     }
 };

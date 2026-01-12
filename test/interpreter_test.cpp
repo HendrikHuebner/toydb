@@ -22,12 +22,15 @@ public:
     void addTable(const std::string& tableName, const std::vector<std::pair<std::string, DataType>>& columns) {
         TableMeta meta;
         meta.name = tableName;
-        meta.id = tableName;
+        // Generate TableId from table name (same as Catalog::makeId)
+        std::hash<std::string> hasher;
+        uint64_t tableIdValue = static_cast<uint64_t>(hasher(tableName));
+        meta.id = TableId{tableIdValue, tableName};
         meta.format = StorageFormat::PARQUET;
 
         std::unordered_map<std::string, ColumnId> tableColumns;
         for (const auto& [colName, colType] : columns) {
-            ColumnId colId(nextColumnId_++, colName);
+            ColumnId colId(nextColumnId_++, colName, meta.id);
             tableColumns[colName] = colId;
 
             ColumnMeta colMeta;
@@ -50,25 +53,41 @@ public:
     }
 
     std::optional<ColumnId> resolveColumn(const std::string& tableName, const std::string& columnName) override {
-        if (tableName.empty()) {
-            // Try to find in all tables (for now, just check first table)
-            // In a real implementation, we'd need to handle ambiguity
-            if (!tables_.empty()) {
-                auto& firstTable = tables_.begin()->second;
-                auto it = columnMap_.find(firstTable.name);
-                if (it != columnMap_.end()) {
-                    auto colIt = it->second.find(columnName);
-                    if (colIt != it->second.end()) {
-                        return colIt->second;
-                    }
-                }
+        tdb_assert(!tableName.empty(), "Table name cannot be empty");
+        tdb_assert(!columnName.empty(), "Column name cannot be empty");
+
+        auto it = columnMap_.find(tableName);
+        if (it != columnMap_.end()) {
+            auto colIt = it->second.find(columnName);
+            if (colIt != it->second.end()) {
+                return colIt->second;
             }
-        } else {
-            auto it = columnMap_.find(tableName);
-            if (it != columnMap_.end()) {
-                auto colIt = it->second.find(columnName);
-                if (colIt != it->second.end()) {
-                    return colIt->second;
+        }
+        return std::nullopt;
+    }
+
+    // FIXME: This should be handled by the catalog
+    std::optional<DataType> getColumnType(const ColumnId& columnId) override {
+        // Find the table for this column
+        std::string tableName = columnId.getTableId().getName();
+        auto tableIt = tables_.find(tableName);
+        if (tableIt == tables_.end()) {
+            return std::nullopt;
+        }
+
+        // Find the column in the schema
+        for (const auto& colMeta : tableIt->second.schema) {
+            if (colMeta.name == columnId.getName()) {
+                if (colMeta.type == "INT64") {
+                    return DataType::getInt64();
+                } else if (colMeta.type == "INT32") {
+                    return DataType::getInt32();
+                } else if (colMeta.type == "DOUBLE") {
+                    return DataType::getDouble();
+                } else if (colMeta.type == "BOOL") {
+                    return DataType::getBool();
+                } else if (colMeta.type == "STRING") {
+                    return DataType::getString();
                 }
             }
         }
@@ -371,7 +390,9 @@ TEST_F(InterpreterTest, SelectWithoutWhere) {
     ASSERT_EQ(projection->getChildCount(), 1);
     auto* tableScan = dynamic_cast<TableScanOp*>(projection->getChild(0).get());
     ASSERT_NE(tableScan, nullptr);
-    ASSERT_EQ(tableScan->getTableName(), "users");
+    const auto& scanColumns = tableScan->getColumns();
+    ASSERT_FALSE(scanColumns.empty());
+    ASSERT_EQ(scanColumns[0].getTableId().getName(), "users");
 }
 
 TEST_F(InterpreterTest, TableNotFound) {

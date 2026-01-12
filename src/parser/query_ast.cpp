@@ -23,6 +23,9 @@ std::ostream& TableExpr::print(std::ostream& os) const noexcept {
 }
 
 std::ostream& ColumnRef::print(std::ostream& os) const noexcept {
+    if (!table.empty()) {
+        os << table << ".";
+    }
     os << name;
     if (!alias.empty()) {
         os << " AS " << alias;
