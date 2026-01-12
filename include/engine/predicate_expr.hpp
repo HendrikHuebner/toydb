@@ -83,12 +83,15 @@ public:
 class ColumnRefExpr : public PredicateExpr {
 private:
     ColumnId columnId_;
+    DataType type_;
 
 protected:
     int32_t columnIndex_ = -1;
 
 public:
-    explicit ColumnRefExpr(const ColumnId& columnId) : columnId_(columnId), columnIndex_(-1) {}
+    explicit ColumnRefExpr(const ColumnId& columnId, DataType type)
+        : columnId_(columnId), type_(type) {}
+
 
     const ColumnId& getColumnId() const noexcept {
         return columnId_;
@@ -96,6 +99,10 @@ public:
 
     int32_t getColumnIndex() const noexcept {
         return columnIndex_;
+    }
+
+    DataType getType() const noexcept {
+        return type_;
     }
 
     void initializeIndexMap(int32_t* nextIndex = nullptr) override {
@@ -203,6 +210,38 @@ public:
         [[maybe_unused]] const RowVectorBuffer& buffer,
         [[maybe_unused]] int64_t rowIndex) const override {
         return isNull() ? PredicateValue::NULL_VALUE : PredicateValue::TRUE;
+    }
+};
+
+class CastExpr : public PredicateExpr {
+private:
+    DataType type_;
+
+    // For now, the expression is expected to be a ColumnRefExpr or a ConstantExpr.
+    std::unique_ptr<PredicateExpr> expr_;
+
+public:
+    CastExpr(DataType type, std::unique_ptr<PredicateExpr> expr) : type_(type), expr_(std::move(expr)) {}
+
+    DataType getType() const noexcept {
+        return type_;
+    }
+
+    const PredicateExpr* getExpr() const {
+        return expr_.get();
+    }
+
+    void initializeIndexMap(int32_t* nextIndex = nullptr) override {
+        expr_->initializeIndexMap(nextIndex);
+    }
+
+    PredicateResultVector evaluate(const RowVectorBuffer& buffer) const override {
+        // TODO: Implement cast
+        return expr_->evaluate(buffer);
+    }
+
+    PredicateValue evaluateRow(const RowVectorBuffer& buffer, int64_t rowIndex) const override {
+        return expr_->evaluateRow(buffer, rowIndex);
     }
 };
 

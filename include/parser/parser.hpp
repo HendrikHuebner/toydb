@@ -23,7 +23,7 @@ class Parser {
 
     std::unique_ptr<ast::Expression> parseWhere();
 
-    std::unique_ptr<ast::Expression> parseSelect();
+    std::unique_ptr<ast::SelectFrom> parseSelect();
 
     std::unique_ptr<ast::Insert> parseInsertInto();
 

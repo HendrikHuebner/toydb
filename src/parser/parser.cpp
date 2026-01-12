@@ -161,9 +161,7 @@ std::unique_ptr<ast::Expression> Parser::parseTerm() {
     auto token = ts.next();
 
     if (token.type == TokenType::IdentifierType) {
-        // This should probably not be reached.
-        Logger::warn("Parsing identifier as string constant: {}", token.getString());
-        return std::make_unique<ast::ConstantString>(token.getString());
+        return std::make_unique<ast::ColumnRef>(token.getString());
 
     } else if (token.type == TokenType::Int32Literal) {
         return std::make_unique<ast::ConstantInt>(token.getInt(), false);
@@ -214,6 +212,81 @@ std::unique_ptr<ast::Expression> Parser::parseWhere() {
                               ts.getLinePosition());
     }
     return expr;
+}
+
+/**
+ * Parses a SELECT ... FROM ... [WHERE ...] statement and returns its AST representation.
+ * @throws ParserException if syntax is invalid
+ */
+std::unique_ptr<ast::SelectFrom> Parser::parseSelect() {
+    getLogger().trace("Parsing SELECT statement");
+
+    expectToken(TokenType::KeySelect, "SELECT statement");
+
+    // TODO: Support DISTINCT keyword
+    // TODO: Support column aliases (AS keyword)
+    auto selectFrom = std::make_unique<ast::SelectFrom>();
+
+    // Parse column list or *
+    auto token = ts.peek();
+    if (token.type == TokenType::Asterisk) {
+        ts.next();
+        selectFrom->selectAll = true;
+    } else {
+        // Parse column list
+        bool first = true;
+        while (true) {
+            if (!first) {
+                if (ts.peek().type != TokenType::Comma) {
+                    break;
+                }
+                ts.next();
+            }
+            first = false;
+
+            token = parseIdentifier("column name");
+            // TODO: Support qualified column names (table.column)
+            // TODO: Support column aliases (AS keyword)
+            selectFrom->columns.emplace_back(token.getString());
+        }
+
+        if (selectFrom->columns.empty()) {
+            throw ParserException("SELECT must have at least one column or *",
+                                  ts.getCurrentLineNumber(), ts.getLinePosition());
+        }
+    }
+
+    // Parse FROM clause
+    expectToken(TokenType::KeyFrom, "FROM statement");
+
+    // Parse table list (comma-separated)
+    // TODO: Support JOIN syntax (currently only comma-separated tables, cross join)
+    bool firstTable = true;
+    while (true) {
+        if (!firstTable) {
+            if (ts.peek().type != TokenType::Comma) {
+                break;
+            }
+            ts.next();
+        }
+        firstTable = false;
+
+        token = parseIdentifier("table name");
+        // TODO: Support table aliases (AS keyword)
+        ast::Table table(token.getString());
+        selectFrom->tables.emplace_back(table);
+    }
+
+    if (selectFrom->tables.empty()) {
+        throw ParserException("SELECT must have at least one table",
+                              ts.getCurrentLineNumber(), ts.getLinePosition());
+    }
+
+    selectFrom->where = parseWhere();
+
+    // TODO: Support ORDER BY clause
+
+    return selectFrom;
 }
 
 DataType parseDataType(Token token, size_t line, size_t pos) {
@@ -406,6 +479,9 @@ std::expected<std::unique_ptr<ast::QueryAST>, std::string> Parser::parseQuery() 
 
     try {
         switch (token.type) {
+            case TokenType::KeySelect:
+                query = parseSelect().release();
+                break;
             case TokenType::KeyInsert:
                 query = parseInsertInto().release();
                 break;

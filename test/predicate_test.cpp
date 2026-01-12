@@ -264,7 +264,7 @@ TEST_F(PredicateTest, ColumnComparison) {
 
     // Create predicate: column > 25
     ColumnId colId(0, "col0");
-    auto colRef = std::make_unique<ColumnRefExpr>(colId);
+    auto colRef = std::make_unique<ColumnRefExpr>(colId, DataType::getInt64());
     auto constant = std::make_unique<ConstantExpr>(DataType::getInt64(), 25L);
     CompareExpr compare(CompareOp::GREATER, DataType::getInt64(), std::move(colRef), std::move(constant));
     compare.initializeIndexMap();
@@ -316,19 +316,19 @@ TEST_F(PredicateTest, ComplexNestedPredicateWithColumnIndexMap) {
     ColumnId col2Id(2, "col2");
 
     // col0 > 25
-    auto col0Ref = std::make_unique<ColumnRefExpr>(col0Id);
+    auto col0Ref = std::make_unique<ColumnRefExpr>(col0Id, DataType::getInt64());
     auto const25 = std::make_unique<ConstantExpr>(DataType::getInt64(), 25L);
     auto col0Gt25 = std::make_unique<CompareExpr>(
         CompareOp::GREATER, DataType::getInt64(), std::move(col0Ref), std::move(const25));
 
     // col1 < 20
-    auto col1Ref = std::make_unique<ColumnRefExpr>(col1Id);
+    auto col1Ref = std::make_unique<ColumnRefExpr>(col1Id, DataType::getInt64());
     auto const20 = std::make_unique<ConstantExpr>(DataType::getInt64(), 20L);
     auto col1Lt20 = std::make_unique<CompareExpr>(
         CompareOp::LESS, DataType::getInt64(), std::move(col1Ref), std::move(const20));
 
     // col2 > 250
-    auto col2Ref = std::make_unique<ColumnRefExpr>(col2Id);
+    auto col2Ref = std::make_unique<ColumnRefExpr>(col2Id, DataType::getInt64());
     auto const250 = std::make_unique<ConstantExpr>(DataType::getInt64(), 250L);
     auto col2Gt250 = std::make_unique<CompareExpr>(
         CompareOp::GREATER, DataType::getInt64(), std::move(col2Ref), std::move(const250));

@@ -22,8 +22,12 @@ std::ostream& TableExpr::print(std::ostream& os) const noexcept {
     }
 }
 
-std::ostream& Column::print(std::ostream& os) const noexcept {
-    return os << name;
+std::ostream& ColumnRef::print(std::ostream& os) const noexcept {
+    os << name;
+    if (!alias.empty()) {
+        os << " AS " << alias;
+    }
+    return os;
 }
 
 std::ostream& ConstantInt::print(std::ostream& os) const noexcept {
@@ -55,7 +59,7 @@ std::ostream& Condition::print(std::ostream& os) const noexcept {
 }
 
 std::ostream& SelectFrom::print(std::ostream& os) const noexcept {
-    tdb_assert(columns.size() > 0, "Select node must have at least one column");
+    tdb_assert(selectAll || columns.size() > 0, "Select node must select at least one column.");
     tdb_assert(tables.size() > 0, "Select node must have at least one table");
 
     os << "SELECT ";
@@ -63,11 +67,17 @@ std::ostream& SelectFrom::print(std::ostream& os) const noexcept {
     if (distinct)
         os << "DISTINCT ";
 
-    for (size_t i = 0; i < columns.size(); ++i) {
-        os << columns[i];
-        if (i < columns.size() - 1)
-            os << ", ";
+    if (selectAll) {
+        os << "*";
+    } else {
+        for (size_t i = 0; i < columns.size(); ++i) {
+            os << columns[i];
+            if (i < columns.size() - 1)
+                os << ", ";
+        }
     }
+
+    os << " FROM ";
 
     for (size_t i = 0; i < tables.size(); ++i) {
         os << tables[i];
@@ -76,7 +86,7 @@ std::ostream& SelectFrom::print(std::ostream& os) const noexcept {
     }
 
     if (where) {
-        os << *where;
+        os << " WHERE " << *where;
     }
 
     if (orderBy) {

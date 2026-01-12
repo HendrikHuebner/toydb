@@ -330,8 +330,8 @@ bool compareASTNodes(const toydb::ast::ASTNode* expected, const toydb::ast::ASTN
     }
 
     // Compare Column nodes
-    if (auto* expColumn = dynamic_cast<const Column*>(expected)) {
-        auto* actColumn = dynamic_cast<const Column*>(actual);
+    if (auto* expColumn = dynamic_cast<const ColumnRef*>(expected)) {
+        auto* actColumn = dynamic_cast<const ColumnRef*>(actual);
         if (!actColumn) {
             toydb::Logger::error("AST mismatch at {}: expected Column but got different type",
                                  path);

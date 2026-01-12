@@ -318,4 +318,22 @@ public:
     }
 };
 
+class TableScanOp : public LogicalOperator {
+private:
+    std::string tableName_;
+
+public:
+    explicit TableScanOp(std::string tableName)
+        : tableName_(std::move(tableName)) {}
+
+    const std::string& getTableName() const noexcept {
+        return tableName_;
+    }
+
+    std::ostream& print(std::ostream& os) const override {
+        os << "TableScan[" << tableName_ << "]";
+        return os;
+    }
+};
+
 } // namespace toydb

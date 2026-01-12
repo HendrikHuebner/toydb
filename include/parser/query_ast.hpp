@@ -24,17 +24,6 @@ struct QueryAST {
     friend std::ostream& operator<<(std::ostream& os, const QueryAST&);
 };
 
-struct Column : public ASTNode {
-    std::string name;
-    std::string alias;
-
-    Column(const std::string& name) noexcept : name(name) {}
-
-    Column(const std::string& name, const std::string& alias) noexcept : name(name), alias(alias) {}
-
-    std::ostream& print(std::ostream&) const noexcept override;
-};
-
 struct Table : public ASTNode {
     std::string name;
     std::string alias;
@@ -88,6 +77,17 @@ struct ConstantBool : public Constant {
     bool value;
 
     explicit ConstantBool(bool value) noexcept : value(value) {}
+
+    std::ostream& print(std::ostream&) const noexcept override;
+};
+
+struct ColumnRef : public Expression {
+    std::string name;
+    std::string alias;
+
+    explicit ColumnRef(const std::string& name) noexcept : name(name) {}
+
+    ColumnRef(const std::string& name, const std::string& alias) noexcept : name(name), alias(alias) {}
 
     std::ostream& print(std::ostream&) const noexcept override;
 };
@@ -189,11 +189,12 @@ struct Delete : public ASTNode {
 };
 
 struct SelectFrom : public ASTNode {
-    std::vector<Column> columns;
+    std::vector<ColumnRef> columns;
     std::vector<TableExpr> tables;
     std::unique_ptr<Expression> where;
-    std::optional<Column> orderBy;
+    std::optional<ColumnRef> orderBy;
     bool distinct = false;
+    bool selectAll = false;  // true when SELECT * is used
 
     std::ostream& print(std::ostream&) const noexcept override;
 };
