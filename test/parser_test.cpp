@@ -53,6 +53,10 @@ class ParserTest : public ::testing::Test {
         return std::make_unique<ColumnRef>(name);
     }
 
+    std::unique_ptr<ColumnRef> qualifiedIdent(const std::string& table, const std::string& column) {
+        return std::make_unique<ColumnRef>(table, column, "");
+    }
+
     std::unique_ptr<ConstantInt> makeIntLiteral(int64_t value, bool isInt64 = false) {
         return std::make_unique<ConstantInt>(value, isInt64);
     }
@@ -151,6 +155,14 @@ class ParserTest : public ::testing::Test {
 
     std::unique_ptr<Condition> eq(const std::string& left, int64_t right) {
         return makeCondition(CompareOp::EQUAL, ident(left), makeIntLiteral(right, false));
+    }
+
+    std::unique_ptr<Condition> eqQualified(const std::string& table, const std::string& column, int64_t right) {
+        return makeCondition(CompareOp::EQUAL, qualifiedIdent(table, column), makeIntLiteral(right, false));
+    }
+
+    std::unique_ptr<Condition> gtQualified(const std::string& table, const std::string& column, int64_t right) {
+        return makeCondition(CompareOp::GREATER, qualifiedIdent(table, column), makeIntLiteral(right, false));
     }
 
     std::unique_ptr<Condition> ne(const std::string& left, const std::string& right) {
@@ -403,4 +415,55 @@ TEST_F(ParserTest, CreateTableInvalidDataType) {
 
 TEST_F(ParserTest, EmptyQuery) {
     testFailedParse("", "Unsupported query type");
+}
+
+TEST_F(ParserTest, QualifiedColumnInSelect) {
+    auto select = std::make_unique<SelectFrom>();
+    select->columns.emplace_back("users", "id", "");
+    select->tables.emplace_back(Table("users"));
+    QueryAST expected(select.release());
+    testSuccessfulParse("SELECT users.id FROM users", expected);
+}
+
+TEST_F(ParserTest, QualifiedColumnMultipleInSelect) {
+    auto select = std::make_unique<SelectFrom>();
+    select->columns.emplace_back("users", "id", "");
+    select->columns.emplace_back("users", "name", "");
+    select->tables.emplace_back(Table("users"));
+    QueryAST expected(select.release());
+    testSuccessfulParse("SELECT users.id, users.name FROM users", expected);
+}
+
+TEST_F(ParserTest, QualifiedColumnInSelectAndWhere) {
+    auto select = std::make_unique<SelectFrom>();
+    select->columns.emplace_back("users", "id", "");
+    select->columns.emplace_back("users", "name", "");
+    select->tables.emplace_back(Table("users"));
+    select->where = gtQualified("users", "age", 20);
+    QueryAST expected(select.release());
+    testSuccessfulParse("SELECT users.id, users.name FROM users WHERE users.age > 20", expected);
+}
+
+TEST_F(ParserTest, MixedQualifiedAndUnqualified) {
+    auto select = std::make_unique<SelectFrom>();
+    select->columns.emplace_back("users", "id", "");
+    select->columns.emplace_back("name");
+    select->tables.emplace_back(Table("users"));
+    QueryAST expected(select.release());
+    testSuccessfulParse("SELECT users.id, name FROM users", expected);
+}
+
+TEST_F(ParserTest, MultiplePeriodsError) {
+    // The parser detects the second period as an unexpected token
+    testFailedParse("SELECT users.id.extra FROM users", "Expected FROM statement");
+}
+
+TEST_F(ParserTest, QualifiedColumnWithComparison) {
+    auto select = std::make_unique<SelectFrom>();
+    select->columns.emplace_back("users", "id", "");
+    select->tables.emplace_back(Table("users"));
+    auto condition = makeCondition(CompareOp::GREATER, qualifiedIdent("users", "age"), makeIntLiteral(20, false));
+    select->where = std::move(condition);
+    QueryAST expected(select.release());
+    testSuccessfulParse("SELECT users.id FROM users WHERE users.age > 20", expected);
 }

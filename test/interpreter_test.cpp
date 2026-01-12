@@ -1,6 +1,7 @@
 #include "planner/interpreter.hpp"
 #include "parser/parser.hpp"
 #include "engine/predicate_expr.hpp"
+#include "test_helpers.hpp"
 #include <gtest/gtest.h>
 #include <memory>
 #include <string>
@@ -9,6 +10,7 @@
 using namespace toydb;
 using namespace toydb::parser;
 using namespace toydb::ast;
+using namespace toydb::test::plan_validation;
 
 class MockQueryCatalog : public PlaceholderCatalog {
 private:
@@ -412,6 +414,181 @@ TEST_F(InterpreterTest, ColumnNotFound) {
     ASSERT_TRUE(result.has_value()) << "Failed to parse query. Error: " << result.error();
 
     // Should throw an exception
+    EXPECT_THROW({
+        auto plan = interpreter_->interpret(*result.value());
+    }, std::runtime_error);
+}
+
+TEST_F(InterpreterTest, QualifiedColumnReferences) {
+    Parser parser("SELECT users.id, users.name FROM users WHERE users.age > 20");
+    auto result = parser.parseQuery();
+    ASSERT_TRUE(result.has_value()) << "Failed to parse query. Error: " << result.error();
+
+    auto plan = interpreter_->interpret(*result.value());
+    ASSERT_TRUE(plan.has_value()) << "Failed to interpret query";
+
+    // Verify projection columns are qualified correctly
+    auto* projection = expectProjectionRoot(*plan);
+    expectProjectionColumns(*projection, {
+        {"users", "id"},
+        {"users", "name"}
+    });
+
+    // Verify WHERE clause uses qualified column reference
+    auto* filter = expectFilterChild(*projection, 0);
+    auto* compareExpr = expectComparePredicate(*filter, CompareOp::GREATER);
+    expectColumnRefOperand(*compareExpr, CompareSide::LEFT, "users", "age");
+    expectConstantOperand(*compareExpr, CompareSide::RIGHT, 20);
+}
+
+// TODO: Add tests for table aliases once parser supports them
+// Example queries to test:
+// - SELECT u.id FROM users u WHERE u.name = 'test'
+// - SELECT u.id, u.name FROM users u WHERE u.age > 20
+
+TEST_F(InterpreterTest, AmbiguousColumnError) {
+    // Add a second table with overlapping column names
+    catalog_->addTable("orders", {
+        {"id", DataType::getInt32()},
+        {"user_id", DataType::getInt32()},
+        {"amount", DataType::getDouble()}
+    });
+
+    // TODO: Parser doesn't support multiple tables yet
+    // Once parser supports multiple tables, replace this with:
+    // Parser parser("SELECT id FROM users, orders");
+
+    // Manually construct AST with multiple tables
+    auto selectFrom = std::make_unique<ast::SelectFrom>();
+    selectFrom->columns.emplace_back("id");
+
+    selectFrom->tables.emplace_back(ast::Table("users"));
+    selectFrom->tables.emplace_back(ast::Table("orders"));
+
+    ast::QueryAST ast(selectFrom.release());
+
+    // Should throw an exception due to ambiguous column
+    EXPECT_THROW({
+        auto plan = interpreter_->interpret(ast);
+    }, std::runtime_error);
+}
+
+TEST_F(InterpreterTest, AmbiguousColumnResolvedWithQualified) {
+    // Add a second table with overlapping column names
+    catalog_->addTable("orders", {
+        {"id", DataType::getInt32()},
+        {"user_id", DataType::getInt32()},
+        {"amount", DataType::getDouble()}
+    });
+
+    // TODO: Interpreter doesn't support multiple tables yet
+    // Once multiple tables are supported, this should succeed
+    // Parser parser("SELECT users.id, orders.id FROM users, orders");
+
+    // Manually construct AST with qualified references (parser supports qualified, but not multiple tables)
+    auto selectFrom = std::make_unique<ast::SelectFrom>();
+    selectFrom->columns.emplace_back("users", "id", "");
+    selectFrom->columns.emplace_back("orders", "id", "");
+
+    selectFrom->tables.emplace_back(ast::Table("users"));
+    selectFrom->tables.emplace_back(ast::Table("orders"));
+
+    ast::QueryAST ast(selectFrom.release());
+
+    // TODO: Implement this, currently it fails
+}
+
+TEST_F(InterpreterTest, SelectStarNoProjection) {
+    Parser parser("SELECT * FROM users");
+    auto result = parser.parseQuery();
+    ASSERT_TRUE(result.has_value()) << "Failed to parse query. Error: " << result.error();
+
+    auto plan = interpreter_->interpret(*result.value());
+    ASSERT_TRUE(plan.has_value()) << "Failed to interpret query";
+
+    auto* root = plan->getRoot();
+    ASSERT_NE(root, nullptr);
+
+    // Should just be a table scan of everything
+    auto* tableScan = dynamic_cast<TableScanOp*>(root);
+    ASSERT_NE(tableScan, nullptr);
+    const auto& scanColumns = tableScan->getColumns();
+    ASSERT_EQ(scanColumns.size(), 3); // id, name, age
+    ASSERT_EQ(scanColumns[0].getTableId().getName(), "users");
+}
+
+TEST_F(InterpreterTest, SelectStarWithWhere) {
+    Parser parser("SELECT * FROM users WHERE id = 1");
+    auto result = parser.parseQuery();
+    ASSERT_TRUE(result.has_value()) << "Failed to parse query. Error: " << result.error();
+
+    auto plan = interpreter_->interpret(*result.value());
+    ASSERT_TRUE(plan.has_value()) << "Failed to interpret query";
+
+    auto* root = plan->getRoot();
+    ASSERT_NE(root, nullptr);
+
+    // Should have FilterOp -> TableScanOp
+    auto* filter = dynamic_cast<FilterOp*>(root);
+    ASSERT_NE(filter, nullptr);
+    ASSERT_EQ(filter->getChildCount(), 1);
+
+    auto* tableScan = dynamic_cast<TableScanOp*>(filter->getChild(0).get());
+    ASSERT_NE(tableScan, nullptr);
+    const auto& scanColumns = tableScan->getColumns();
+    ASSERT_EQ(scanColumns.size(), 3);
+}
+
+TEST_F(InterpreterTest, QualifiedColumnNotFound) {
+    Parser parser("SELECT users.nonexistent FROM users");
+    auto result = parser.parseQuery();
+    ASSERT_TRUE(result.has_value()) << "Failed to parse query. Error: " << result.error();
+
+    // Should throw an exception
+    EXPECT_THROW({
+        auto plan = interpreter_->interpret(*result.value());
+    }, std::runtime_error);
+}
+
+TEST_F(InterpreterTest, QualifiedColumnInvalidTable) {
+    Parser parser("SELECT nonexistent.id FROM users");
+    auto result = parser.parseQuery();
+    ASSERT_TRUE(result.has_value()) << "Failed to parse query. Error: " << result.error();
+
+    // Should throw an exception - table qualifier not found
+    EXPECT_THROW({
+        auto plan = interpreter_->interpret(*result.value());
+    }, std::runtime_error);
+}
+
+TEST_F(InterpreterTest, ColumnNotFoundInWhere) {
+    Parser parser("SELECT id FROM users WHERE nonexistent = 1");
+    auto result = parser.parseQuery();
+    ASSERT_TRUE(result.has_value()) << "Failed to parse query. Error: " << result.error();
+
+    // Should throw an exception
+    EXPECT_THROW({
+        auto plan = interpreter_->interpret(*result.value());
+    }, std::runtime_error);
+}
+
+TEST_F(InterpreterTest, QualifiedColumnNotFoundInWhere) {
+    Parser parser("SELECT id FROM users WHERE users.nonexistent = 1");
+    auto result = parser.parseQuery();
+    ASSERT_TRUE(result.has_value()) << "Failed to parse query. Error: " << result.error();
+
+    // Should throw an exception
+    EXPECT_THROW({
+        auto plan = interpreter_->interpret(*result.value());
+    }, std::runtime_error);
+}
+
+TEST_F(InterpreterTest, InvalidTableQualifierInWhere) {
+    Parser parser("SELECT id FROM users WHERE nonexistent.id = 1");
+    auto result = parser.parseQuery();
+    ASSERT_TRUE(result.has_value()) << "Failed to parse query. Error: " << result.error();
+
+    // Should throw an exception - invalid table qualifier
     EXPECT_THROW({
         auto plan = interpreter_->interpret(*result.value());
     }, std::runtime_error);

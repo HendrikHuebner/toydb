@@ -11,6 +11,21 @@ namespace toydb {
 
 enum class CompareOp { EQUAL, NOT_EQUAL, GREATER, LESS, GREATER_EQUAL, LESS_EQUAL, AND, OR, NOT };
 
+inline std::string toString(CompareOp op) noexcept {
+    switch (op) {
+        case CompareOp::EQUAL: return "=";
+        case CompareOp::NOT_EQUAL: return "!=";
+        case CompareOp::GREATER: return ">";
+        case CompareOp::LESS: return "<";
+        case CompareOp::GREATER_EQUAL: return ">=";
+        case CompareOp::LESS_EQUAL: return "<=";
+        case CompareOp::AND: return "AND";
+        case CompareOp::OR: return "OR";
+        case CompareOp::NOT: return "NOT";
+        default: return "UNKNOWN";
+    }
+}
+
 /**
  * @brief Table identifier with a unique ID and human-readable name
  */

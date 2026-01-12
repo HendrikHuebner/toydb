@@ -1,6 +1,10 @@
 #include "test_helpers.hpp"
 #include <sstream>
 #include "common/logging.hpp"
+#include "planner/logical_operator.hpp"
+#include "engine/predicate_expr.hpp"
+#include "common/types.hpp"
+#include <gtest/gtest.h>
 
 namespace toydb::test {
 
@@ -344,6 +348,12 @@ bool compareASTNodes(const toydb::ast::ASTNode* expected, const toydb::ast::ASTN
             return false;
         }
 
+        if (expColumn->table != actColumn->table) {
+            toydb::Logger::error("AST mismatch at {}.table: expected '{}' but got '{}'", path,
+                                 expColumn->table, actColumn->table);
+            return false;
+        }
+
         if (expColumn->alias != actColumn->alias) {
             toydb::Logger::error("AST mismatch at {}.alias: expected '{}' but got '{}'", path,
                                  expColumn->alias, actColumn->alias);
@@ -441,6 +451,68 @@ bool compareASTNodes(const toydb::ast::ASTNode* expected, const toydb::ast::ASTN
         return true;
     }
 
+    // Compare SelectFrom nodes
+    if (auto* expSelect = dynamic_cast<const SelectFrom*>(expected)) {
+        auto* actSelect = dynamic_cast<const SelectFrom*>(actual);
+        if (!actSelect) {
+            toydb::Logger::error("AST mismatch at {}: expected SelectFrom but got different type", path);
+            return false;
+        }
+
+        if (expSelect->selectAll != actSelect->selectAll) {
+            toydb::Logger::error("AST mismatch at {}.selectAll: expected {} but got {}", path,
+                                 expSelect->selectAll, actSelect->selectAll);
+            return false;
+        }
+
+        if (expSelect->distinct != actSelect->distinct) {
+            toydb::Logger::error("AST mismatch at {}.distinct: expected {} but got {}", path,
+                                 expSelect->distinct, actSelect->distinct);
+            return false;
+        }
+
+        if (expSelect->columns.size() != actSelect->columns.size()) {
+            toydb::Logger::error("AST mismatch at {}.columns: expected {} columns but got {}", path,
+                                 expSelect->columns.size(), actSelect->columns.size());
+            return false;
+        }
+
+        for (size_t i = 0; i < expSelect->columns.size(); ++i) {
+            std::stringstream colPath;
+            colPath << path << ".columns[" << i << "]";
+            if (!compareASTNodes(&expSelect->columns[i], &actSelect->columns[i], colPath.str())) {
+                return false;
+            }
+        }
+
+        if (expSelect->tables.size() != actSelect->tables.size()) {
+            toydb::Logger::error("AST mismatch at {}.tables: expected {} tables but got {}", path,
+                                 expSelect->tables.size(), actSelect->tables.size());
+            return false;
+        }
+
+        for (size_t i = 0; i < expSelect->tables.size(); ++i) {
+            std::stringstream tablePath;
+            tablePath << path << ".tables[" << i << "]";
+            if (!compareASTNodes(&expSelect->tables[i].table, &actSelect->tables[i].table, tablePath.str())) {
+                return false;
+            }
+        }
+
+        if ((expSelect->where == nullptr) != (actSelect->where == nullptr)) {
+            toydb::Logger::error("AST mismatch at {}.where: one is null and the other is not", path);
+            return false;
+        }
+
+        if (expSelect->where) {
+            if (!compareASTNodes(expSelect->where.get(), actSelect->where.get(), path + ".where")) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     // Unknown node type
     toydb::Logger::error("AST mismatch at {}: unknown AST node type", path);
     return false;
@@ -460,3 +532,148 @@ bool compareQueryAST(const toydb::ast::QueryAST& expected, const toydb::ast::Que
 }
 
 }  // namespace toydb::test
+
+namespace toydb::test::plan_validation {
+
+const toydb::ProjectionOp* expectProjectionRoot(const toydb::LogicalQueryPlan& plan) {
+    auto* root = plan.getRoot();
+    EXPECT_NE(root, nullptr) << "Plan root is null";
+    if (root == nullptr) {
+        return nullptr;
+    }
+
+    auto* projection = dynamic_cast<const toydb::ProjectionOp*>(root);
+    EXPECT_NE(projection, nullptr) << "Plan root is not a ProjectionOp";
+    if (projection == nullptr) {
+        return nullptr;
+    }
+
+    return projection;
+}
+
+void expectProjectionColumns(const toydb::ProjectionOp& projection,
+                            const std::vector<std::pair<std::string, std::string>>& expectedColumns) {
+    const auto& columns = projection.getColumns();
+    ASSERT_EQ(columns.size(), expectedColumns.size())
+        << "Projection has " << columns.size() << " columns, expected " << expectedColumns.size();
+
+    for (size_t i = 0; i < expectedColumns.size(); ++i) {
+        const auto& [expectedTable, expectedColumn] = expectedColumns[i];
+        const auto& actualColumn = columns[i];
+
+        ASSERT_EQ(actualColumn.getName(), expectedColumn)
+            << "Column " << i << " name mismatch: expected '" << expectedColumn
+            << "', got '" << actualColumn.getName() << "'";
+
+        if (!expectedTable.empty()) {
+            ASSERT_EQ(actualColumn.getTableId().getName(), expectedTable)
+                << "Column " << i << " table name mismatch: expected '" << expectedTable
+                << "', got '" << actualColumn.getTableId().getName() << "'";
+        }
+    }
+}
+
+const toydb::FilterOp* expectFilterChild(const toydb::LogicalOperator& parent, size_t childIndex) {
+    EXPECT_LT(childIndex, parent.getChildCount())
+        << "Child index " << childIndex << " out of range (parent has "
+        << parent.getChildCount() << " children)";
+    if (childIndex >= parent.getChildCount()) {
+        return nullptr;
+    }
+
+    auto child = parent.getChild(childIndex);
+    EXPECT_NE(child, nullptr) << "Child at index " << childIndex << " is null";
+    if (child == nullptr) {
+        return nullptr;
+    }
+
+    auto* filter = dynamic_cast<const toydb::FilterOp*>(child.get());
+    EXPECT_NE(filter, nullptr) << "Child at index " << childIndex << " is not a FilterOp";
+    if (filter == nullptr) {
+        return nullptr;
+    }
+
+    return filter;
+}
+
+const toydb::CompareExpr* expectComparePredicate(const toydb::FilterOp& filter, toydb::CompareOp expectedOp) {
+    const auto* predicate = filter.getPredicate();
+    EXPECT_NE(predicate, nullptr) << "Filter predicate is null";
+    if (predicate == nullptr) {
+        return nullptr;
+    }
+
+    auto* compareExpr = dynamic_cast<const toydb::CompareExpr*>(predicate);
+    EXPECT_NE(compareExpr, nullptr) << "Filter predicate is not a CompareExpr";
+    if (compareExpr == nullptr) {
+        return nullptr;
+    }
+
+    EXPECT_EQ(compareExpr->getOp(), expectedOp) << "CompareOp mismatch: expected "
+        << toString(expectedOp) << ", got " << toString(compareExpr->getOp());
+
+    return compareExpr;
+}
+
+void expectColumnRefOperand(const toydb::CompareExpr& compareExpr, CompareSide side,
+                           const std::string& expectedTable, const std::string& expectedColumn) {
+    const toydb::PredicateExpr* operand = (side == CompareSide::LEFT)
+        ? compareExpr.getLeft()
+        : compareExpr.getRight();
+
+    ASSERT_NE(operand, nullptr)
+        << (side == CompareSide::LEFT ? "Left" : "Right") << " operand is null";
+
+    auto* colRef = dynamic_cast<const toydb::ColumnRefExpr*>(operand);
+    ASSERT_NE(colRef, nullptr)
+        << (side == CompareSide::LEFT ? "Left" : "Right")
+        << " operand is not a ColumnRefExpr";
+
+    const auto& columnId = colRef->getColumnId();
+    ASSERT_EQ(columnId.getName(), expectedColumn)
+        << (side == CompareSide::LEFT ? "Left" : "Right")
+        << " operand column name mismatch: expected '" << expectedColumn
+        << "', got '" << columnId.getName() << "'";
+
+    if (!expectedTable.empty()) {
+        ASSERT_EQ(columnId.getTableId().getName(), expectedTable)
+            << (side == CompareSide::LEFT ? "Left" : "Right")
+            << " operand table name mismatch: expected '" << expectedTable
+            << "', got '" << columnId.getTableId().getName() << "'";
+    }
+}
+
+void expectConstantOperand(const toydb::CompareExpr& compareExpr, CompareSide side, int64_t expectedValue) {
+    using toydb::PredicateExpr;
+    using toydb::ConstantExpr;
+    using toydb::DataType;
+
+    const PredicateExpr* operand = (side == CompareSide::LEFT)
+        ? compareExpr.getLeft()
+        : compareExpr.getRight();
+
+    ASSERT_NE(operand, nullptr)
+        << (side == CompareSide::LEFT ? "Left" : "Right") << " operand is null";
+
+    auto* constant = dynamic_cast<const ConstantExpr*>(operand);
+    ASSERT_NE(constant, nullptr)
+        << (side == CompareSide::LEFT ? "Left" : "Right")
+        << " operand is not a ConstantExpr";
+
+    ASSERT_FALSE(constant->isNull())
+        << (side == CompareSide::LEFT ? "Left" : "Right") << " operand is NULL";
+
+    // Check if it's an integer type
+    ASSERT_TRUE(constant->getType() == DataType::getInt32() ||
+                constant->getType() == DataType::getInt64())
+        << (side == CompareSide::LEFT ? "Left" : "Right")
+        << " operand is not an integer constant";
+
+    int64_t actualValue = constant->getIntValue();
+    ASSERT_EQ(actualValue, expectedValue)
+        << (side == CompareSide::LEFT ? "Left" : "Right")
+        << " operand value mismatch: expected " << expectedValue
+        << ", got " << actualValue;
+}
+
+} // namespace toydb::test::plan_validation

@@ -1,6 +1,8 @@
 #pragma once
 
 #include "engine/physical_operator.hpp"
+#include "planner/logical_operator.hpp"
+#include "engine/predicate_expr.hpp"
 #include "common/types.hpp"
 #include "parser/query_ast.hpp"
 #include <vector>
@@ -8,6 +10,7 @@
 #include <string>
 #include <memory>
 #include <cassert>
+#include <gtest/gtest.h>
 
 namespace toydb::test {
 
@@ -148,6 +151,71 @@ inline std::vector<std::string> stringSequence(const std::string& prefix, int64_
 }
 
 } // namespace data_helpers
+
+/**
+ * @brief Plan validation helpers for interpreter tests
+ * These helpers provide clear, descriptive assertions for validating query plans
+ */
+namespace plan_validation {
+
+/**
+ * @brief Enum for specifying which operand of a comparison to validate
+ */
+enum class CompareSide {
+    LEFT,
+    RIGHT,
+};
+
+/**
+ * @brief Expect the root of a plan to be a ProjectionOp
+ * @param plan The query plan to validate
+ * @return Pointer to the ProjectionOp (never null, assertion fails if wrong type)
+ */
+const toydb::ProjectionOp* expectProjectionRoot(const toydb::LogicalQueryPlan& plan);
+
+/**
+ * @brief Validate projection columns match expected table.column pairs
+ * @param projection The ProjectionOp to validate
+ * @param expectedColumns Vector of (table_name, column_name) pairs
+ */
+void expectProjectionColumns(const toydb::ProjectionOp& projection, 
+                            const std::vector<std::pair<std::string, std::string>>& expectedColumns);
+
+/**
+ * @brief Expect a child operator at the given index to be a FilterOp
+ * @param parent The parent operator
+ * @param childIndex Index of the child to validate
+ * @return Pointer to the FilterOp (never null, assertion fails if wrong type or missing)
+ */
+const toydb::FilterOp* expectFilterChild(const toydb::LogicalOperator& parent, size_t childIndex);
+
+/**
+ * @brief Expect a predicate to be a CompareExpr with the given operator
+ * @param filter The FilterOp containing the predicate
+ * @param expectedOp The expected comparison operator
+ * @return Pointer to the CompareExpr (never null, assertion fails if wrong type or operator)
+ */
+const toydb::CompareExpr* expectComparePredicate(const toydb::FilterOp& filter, toydb::CompareOp expectedOp);
+
+/**
+ * @brief Expect an operand of a CompareExpr to be a ColumnRefExpr
+ * @param compareExpr The CompareExpr to validate
+ * @param side Which operand (LEFT or RIGHT)
+ * @param expectedTable Expected table name (empty string if unqualified)
+ * @param expectedColumn Expected column name
+ */
+void expectColumnRefOperand(const toydb::CompareExpr& compareExpr, CompareSide side,
+                           const std::string& expectedTable, const std::string& expectedColumn);
+
+/**
+ * @brief Expect an operand of a CompareExpr to be a ConstantExpr with an integer value
+ * @param compareExpr The CompareExpr to validate
+ * @param side Which operand (LEFT or RIGHT)
+ * @param expectedValue Expected integer value
+ */
+void expectConstantOperand(const toydb::CompareExpr& compareExpr, CompareSide side, int64_t expectedValue);
+
+} // namespace plan_validation
 
 /**
  * @brief Builder for creating MockOperator instances

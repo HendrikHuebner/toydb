@@ -346,6 +346,7 @@ Token TokenStream::lexPunctuationChar() noexcept {
         case '(': return TokenType::ParenthesisL;
         case ')': return TokenType::ParenthesisR;
         case ',': return TokenType::Comma;
+        case '.': return TokenType::Dot;
         default: return TokenType::Unknown;
     }
 }
@@ -403,6 +404,7 @@ std::string Token::toString() const noexcept {
         case TokenType::ParenthesisR: return ")";
         case TokenType::ParenthesisL: return "(";
         case TokenType::Comma: return ",";
+        case TokenType::Dot: return ".";
         case TokenType::Asterisk: return "*";
 
         case TokenType::IdentifierType:

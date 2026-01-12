@@ -59,6 +59,7 @@ enum class TokenType {
     ParenthesisL,
     ParenthesisR,
     Comma,
+    Dot,
 
     Unknown = 666,
 };

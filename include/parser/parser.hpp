@@ -17,6 +17,8 @@ class Parser {
 
     Token parseIdentifier(const std::string& context);
 
+    std::pair<std::string, std::string> parseQualifiedColumnRef(const std::string& context);
+
     std::unique_ptr<ast::Expression> parseExpression();
 
     std::unique_ptr<ast::Expression> parseTerm();

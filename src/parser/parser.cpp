@@ -35,6 +35,29 @@ Token Parser::parseIdentifier(const std::string& context) {
 }
 
 /**
+ * Parses a qualified or unqualified column reference (table.column) and returns the table and column names.
+ * @param context Context string for error messages
+ * @return Pair of (table name, column name). If unqualified, table name is empty.
+ */
+std::pair<std::string, std::string> Parser::parseQualifiedColumnRef(const std::string& context) {
+    auto token = parseIdentifier(context);
+    std::string firstPart = token.getString();
+
+    auto peeked = ts.peek();
+    if (peeked.type == TokenType::Dot) {
+        ts.next();
+
+        auto afterDot = ts.peek();
+        auto secondToken = parseIdentifier(context);
+
+        return {firstPart, secondToken.getString()};
+    }
+
+    // Unqualified identifier
+    return {"", firstPart};
+}
+
+/**
  * Verifies that the next token matches the expected type.
  * @param expected The expected token type
  * @param context Context string for error messages
@@ -158,12 +181,17 @@ std::unique_ptr<ast::Expression> Parser::parseExpression() {
  * Parses a term (identifier or literal) and returns its AST representation.
  */
 std::unique_ptr<ast::Expression> Parser::parseTerm() {
-    auto token = ts.next();
+    auto token = ts.peek();
 
     if (token.type == TokenType::IdentifierType) {
-        return std::make_unique<ast::ColumnRef>(token.getString());
+        // Parse qualified identifier (table.column or just column)
+        auto [table, column] = parseQualifiedColumnRef("column name");
+        return std::make_unique<ast::ColumnRef>(table, column, "");
+    }
 
-    } else if (token.type == TokenType::Int32Literal) {
+    token = ts.next();
+
+    if (token.type == TokenType::Int32Literal) {
         return std::make_unique<ast::ConstantInt>(token.getInt(), false);
 
     } else if (token.type == TokenType::Int64Literal) {
@@ -244,10 +272,10 @@ std::unique_ptr<ast::SelectFrom> Parser::parseSelect() {
             }
             first = false;
 
-            token = parseIdentifier("column name");
-            // TODO: Support qualified column names (table.column)
+            auto [table, column] = parseQualifiedColumnRef("column name");
+
             // TODO: Support column aliases (AS keyword)
-            selectFrom->columns.emplace_back(token.getString());
+            selectFrom->columns.emplace_back(table, column, "");
         }
 
         if (selectFrom->columns.empty()) {
