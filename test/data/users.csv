@@ -1,0 +1,11 @@
+id,name,email,age,city,created_at
+1,Alice Johnson,alice.johnson@email.com,28,New York,2023-01-15
+2,Bob Smith,bob.smith@email.com,35,Los Angeles,2023-02-20
+3,Charlie Brown,charlie.brown@email.com,42,Chicago,2023-03-10
+4,Diana Prince,diana.prince@email.com,29,Seattle,2023-04-05
+5,Edward Norton,edward.norton@email.com,31,Boston,2023-05-12
+6,Fiona Apple,fiona.apple@email.com,26,San Francisco,2023-06-18
+7,George Washington,george.washington@email.com,45,Austin,2023-07-22
+8,Hannah Montana,hannah.montana@email.com,24,Miami,2023-08-30
+9,Ian Fleming,ian.fleming@email.com,38,Denver,2023-09-14
+10,Jane Doe,jane.doe@email.com,33,Portland,2023-10-08

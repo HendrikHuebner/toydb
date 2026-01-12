@@ -1,0 +1,11 @@
+id,name,price,category,stock_quantity,description
+1,Laptop Pro 15,1299.99,Electronics,50,High-performance laptop
+2,Wireless Mouse,29.99,Electronics,200,Ergonomic wireless mouse
+3,Mechanical Keyboard,89.99,Electronics,150,Cherry MX switches
+4,Coffee Maker,79.99,Appliances,75,12-cup programmable coffee maker
+5,Desk Chair,249.99,Furniture,30,Ergonomic office chair
+6,Standing Desk,399.99,Furniture,25,Adjustable height desk
+7,USB-C Cable,12.99,Electronics,500,6ft USB-C charging cable
+8,Monitor 27inch,299.99,Electronics,40,4K UHD monitor
+9,Webcam HD,59.99,Electronics,100,1080p webcam with microphone
+10,Noise Cancelling Headphones,199.99,Electronics,60,Bluetooth headphones
