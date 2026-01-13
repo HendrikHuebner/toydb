@@ -56,7 +56,7 @@ ColumnId SQLInterpreter::resolveColumnRef(const ast::ColumnRef& columnRef, const
     std::vector<std::string> matchingTables;
 
     for (const auto& [tableName, tableMeta] : context.tables) {
-        if (tableMeta.hasColumn(columnName)) {
+        if (tableMeta.schema.getColumnByName(columnName).has_value()) {
             matchingTables.push_back(tableName);
         }
     }
@@ -107,10 +107,7 @@ std::unique_ptr<PredicateExpr> SQLInterpreter::lowerPredicate(const ast::Express
     if (auto* columnRef = dynamic_cast<const ast::ColumnRef*>(expr)) {
         ColumnId colId = resolveColumnRef(*columnRef, context);
         auto colType = catalog_->getColumnType(colId);
-        if (!colType.has_value()) {
-            throw std::runtime_error("Could not determine type for column: " + colId.getName());
-        }
-        return std::make_unique<ColumnRefExpr>(colId, *colType);
+        return std::make_unique<ColumnRefExpr>(colId, colType);
     } else if (auto* constant = dynamic_cast<const ast::Constant*>(expr)) {
         if (auto* constString = dynamic_cast<const ast::ConstantString*>(constant)) {
             throw std::runtime_error("Unexpected string literal in predicate: " + constString->value);
@@ -249,14 +246,9 @@ LogicalQueryPlan SQLInterpreter::handleSelectFrom(const ast::SelectFrom& selectF
 
     // Collect all columns for TableScanOp
     std::vector<ColumnId> scanColumns;
-    for (const auto& [tblName, tableMeta] : context.tables) {
-        for (const auto& colMeta : tableMeta.schema) {
-            auto colId = catalog_->resolveColumn(tblName, colMeta.name);
-            if (colId.has_value()) {
-                scanColumns.push_back(*colId);
-            } else {
-                throw std::runtime_error("Could no resolve column: " + colMeta.name);
-            }
+    for (const auto& [_, tableMeta] : context.tables) {
+        for (const auto& [colId, _] : tableMeta.schema.columns) {
+            scanColumns.push_back(colId);
         }
     }
 

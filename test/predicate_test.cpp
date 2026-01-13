@@ -88,7 +88,7 @@ TEST_F(PredicateTest, CompareExprConstants) {
     auto right = std::make_unique<ConstantExpr>(DataType::getInt64(), 3L);
     CompareExpr compare(CompareOp::LESS, DataType::getInt64(), std::move(left), std::move(right));
 
-    RowVectorBuffer emptyBuffer;
+    RowVector emptyBuffer;
     emptyBuffer.setRowCount(1);
 
     // For constants, we can test the row evaluation
@@ -138,7 +138,7 @@ TEST_F(PredicateTest, CompareExprNull) {
     auto right = std::make_unique<ConstantExpr>(DataType::getInt64(), 5L);
     CompareExpr compare(CompareOp::GREATER, DataType::getInt64(), std::move(left), std::move(right));
     compare.initializeIndexMap();
-    RowVectorBuffer emptyBuffer;
+    RowVector emptyBuffer;
     emptyBuffer.setRowCount(1);
 
     PredicateValue result = compare.evaluateRow(emptyBuffer, 0);
@@ -182,7 +182,7 @@ TEST_F(PredicateTest, LogicalExprAND) {
 
     LogicalExpr andExpr(CompareOp::AND, std::move(compare1), std::move(compare2));
 
-    RowVectorBuffer emptyBuffer;
+    RowVector emptyBuffer;
     emptyBuffer.setRowCount(1);
 
     PredicateValue result = andExpr.evaluateRow(emptyBuffer, 0);
@@ -212,7 +212,7 @@ TEST_F(PredicateTest, LogicalExprOR) {
 
     LogicalExpr orExpr(CompareOp::OR, std::move(compare1), std::move(compare2));
 
-    RowVectorBuffer emptyBuffer;
+    RowVector emptyBuffer;
     emptyBuffer.setRowCount(1);
 
     PredicateValue result = orExpr.evaluateRow(emptyBuffer, 0);
@@ -242,7 +242,7 @@ TEST_F(PredicateTest, ThreeValuedLogic) {
 
     LogicalExpr andExpr(CompareOp::AND, std::move(nullConst), std::move(compare1));
 
-    RowVectorBuffer emptyBuffer;
+    RowVector emptyBuffer;
     emptyBuffer.setRowCount(1);
 
     PredicateValue result = andExpr.evaluateRow(emptyBuffer, 0);
@@ -251,14 +251,12 @@ TEST_F(PredicateTest, ThreeValuedLogic) {
 
 TEST_F(PredicateTest, ColumnComparison) {
     static std::vector<int64_t> intData = {10, 20, 30, 40, 50};
-    ColumnBuffer col;
-    col.columnId = ColumnId(0, "col0");
-    col.type = DataType::getInt64();
-    col.data = intData.data();
-    col.nullBitmap = nullptr;
+    ColumnId columnId(0, "col0");
+    void* data = intData.data();
+    ColumnBuffer col(columnId, DataType::getInt64(), data, 5, nullptr);
     col.count = 5;
 
-    RowVectorBuffer buffer;
+    RowVector buffer;
     buffer.addColumn(col);
     buffer.setRowCount(5);
 
@@ -277,43 +275,30 @@ TEST_F(PredicateTest, ColumnComparison) {
 }
 
 TEST_F(PredicateTest, ComplexNestedPredicateWithColumnIndexMap) {
+    // Tests predicate: (col0 > 25) AND ((col1 < 20) OR (col2 > 250))
     static std::vector<int64_t> col0Data = {10, 20, 30, 40, 50};
     static std::vector<int64_t> col1Data = {5, 15, 25, 35, 45};
     static std::vector<int64_t> col2Data = {100, 200, 300, 400, 500};
 
-    ColumnBuffer col0;
-    col0.columnId = ColumnId(0, "col0");
-    col0.type = DataType::getInt64();
-    col0.data = col0Data.data();
-    col0.nullBitmap = nullptr;
+    ColumnId col0Id(0, "col0");
+    ColumnBuffer col0(col0Id, DataType::getInt64(), col0Data.data(), 5, nullptr);
     col0.count = 5;
 
-    ColumnBuffer col1;
-    col1.columnId = ColumnId(1, "col1");
-    col1.type = DataType::getInt64();
-    col1.data = col1Data.data();
-    col1.nullBitmap = nullptr;
+    ColumnId col1Id(1, "col1");
+    ColumnBuffer col1(col1Id, DataType::getInt64(), col1Data.data(), 5, nullptr);
     col1.count = 5;
 
-    ColumnBuffer col2;
-    col2.columnId = ColumnId(2, "col2");
-    col2.type = DataType::getInt64();
-    col2.data = col2Data.data();
-    col2.nullBitmap = nullptr;
+    ColumnId col2Id(2, "col2");
+    ColumnBuffer col2(col2Id, DataType::getInt64(), col2Data.data(), 5, nullptr);
     col2.count = 5;
 
     // Create buffer with only the columns referenced by the predicate
     // Predicate: (col0 > 25) AND ((col1 < 20) OR (col2 > 250))
-    RowVectorBuffer buffer;
+    RowVector buffer;
     buffer.addColumn(col0);  // Index 0
     buffer.addColumn(col1);  // Index 1
     buffer.addColumn(col2);  // Index 2
     buffer.setRowCount(5);
-
-    // Build complex nested predicate: (col0 > 25) AND ((col1 < 20) OR (col2 > 250))
-    ColumnId col0Id(0, "col0");
-    ColumnId col1Id(1, "col1");
-    ColumnId col2Id(2, "col2");
 
     // col0 > 25
     auto col0Ref = std::make_unique<ColumnRefExpr>(col0Id, DataType::getInt64());

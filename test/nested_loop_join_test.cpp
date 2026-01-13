@@ -51,7 +51,7 @@ TEST_F(NestedLoopJoinTest, BasicEqualityJoin) {
 
     join.initialize();
 
-    RowVectorBuffer output;
+    RowVector output;
     int64_t resultCount = join.next(output);
 
     // Left: [1, 2, 3], Right: [2, 3, 4]
@@ -84,7 +84,7 @@ TEST_F(NestedLoopJoinTest, GreaterThanJoin) {
 
     join.initialize();
 
-    RowVectorBuffer output;
+    RowVector output;
     int64_t resultCount = join.next(output);
 
     // Left: [5, 10, 15], Right: [3, 8, 12]
@@ -128,7 +128,7 @@ TEST_F(NestedLoopJoinTest, ComplexPredicateJoin) {
 
     join.initialize();
 
-    RowVectorBuffer output;
+    RowVector output;
     int64_t resultCount = join.next(output);
 
     // Left: [(1,10), (2,20), (3,30)], Right: [2, 3, 4]
@@ -164,7 +164,7 @@ TEST_F(NestedLoopJoinTest, NoMatches) {
 
     join.initialize();
 
-    RowVectorBuffer output;
+    RowVector output;
     int64_t resultCount = join.next(output);
 
     // Should have 0 matches
@@ -194,7 +194,7 @@ TEST_F(NestedLoopJoinTest, EmptyRightTable) {
 
     join.initialize();
 
-    RowVectorBuffer output;
+    RowVector output;
     int64_t resultCount = join.next(output);
 
     // Should return 0 when right is empty
@@ -225,7 +225,7 @@ TEST_F(NestedLoopJoinTest, LargeDataEqualityJoin) {
     NestedLoopJoinExec join(leftOp, rightOp, std::move(predicate));
     join.initialize();
 
-    RowVectorBuffer output;
+    RowVector output;
     int64_t resultCount = join.next(output);
 
     // Overlap: left[500..999] matches right[0..499] = 500 matches
@@ -259,7 +259,7 @@ TEST_F(NestedLoopJoinTest, LargeDataMultiBatchLeft) {
     NestedLoopJoinExec join(leftOp, rightOp, std::move(predicate));
     join.initialize();
 
-    RowVectorBuffer output;
+    RowVector output;
     int64_t resultCount = join.next(output);
 
     // Left batches: [0-199], [200-399], [400-599], [600-799], [800-999]
@@ -296,7 +296,7 @@ TEST_F(NestedLoopJoinTest, LargeDataMultiBatchRight) {
     NestedLoopJoinExec join(leftOp, rightOp, std::move(predicate));
     join.initialize();
 
-    RowVectorBuffer output;
+    RowVector output;
     int64_t resultCount = join.next(output);
 
     // Left: [0-999], Right batches: [500-699], [700-899], [900-1099], [1100-1299], [1300-1499]
@@ -329,7 +329,7 @@ TEST_F(NestedLoopJoinTest, LargeDataGreaterThanJoin) {
     NestedLoopJoinExec join(leftOp, rightOp, std::move(predicate));
     join.initialize();
 
-    RowVectorBuffer output;
+    RowVector output;
     int64_t resultCount = join.next(output);
 
     // Left: [100-199], Right: [0-149]
@@ -381,7 +381,7 @@ TEST_F(NestedLoopJoinTest, VeryLargeDataMultiBatchBothSides) {
     NestedLoopJoinExec join(leftOp, rightOp, std::move(predicate));
     join.initialize();
 
-    RowVectorBuffer output;
+    RowVector output;
     int64_t resultCount = join.next(output);
 
     // Left: [0-4999], Right: [2000-4999]
@@ -413,7 +413,7 @@ TEST_F(NestedLoopJoinTest, LargeDataNoMatches) {
     NestedLoopJoinExec join(leftOp, rightOp, std::move(predicate));
     join.initialize();
 
-    RowVectorBuffer output;
+    RowVector output;
     int64_t resultCount = join.next(output);
 
     // No overlap, should have 0 matches

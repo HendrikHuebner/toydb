@@ -14,7 +14,7 @@ using namespace toydb::test::plan_validation;
 
 class MockQueryCatalog : public PlaceholderCatalog {
 private:
-    std::unordered_map<std::string, TableMeta> tables_;
+    std::unordered_map<std::string, TableMetadata> tables_;
     std::unordered_map<std::string, std::unordered_map<std::string, ColumnId>> columnMap_;
     uint64_t nextColumnId_;
 
@@ -22,7 +22,7 @@ public:
     MockQueryCatalog() : nextColumnId_(1) {}
 
     void addTable(const std::string& tableName, const std::vector<std::pair<std::string, DataType>>& columns) {
-        TableMeta meta;
+        TableMetadata meta;
         meta.name = tableName;
         // Generate TableId from table name (same as Catalog::makeId)
         std::hash<std::string> hasher;
@@ -35,18 +35,18 @@ public:
             ColumnId colId(nextColumnId_++, colName, meta.id);
             tableColumns[colName] = colId;
 
-            ColumnMeta colMeta;
+            ColumnMetadata colMeta;
             colMeta.name = colName;
-            colMeta.type = colType.toString();
+            colMeta.type = colType;
             colMeta.nullable = true;
-            meta.schema.push_back(colMeta);
+            meta.schema.columns[colId] = colMeta;
         }
 
         tables_[tableName] = meta;
         columnMap_[tableName] = tableColumns;
     }
 
-    std::optional<TableMeta> getTable(const std::string& name) override {
+    std::optional<TableMetadata> getTable(const std::string& name) override {
         auto it = tables_.find(name);
         if (it != tables_.end()) {
             return it->second;
@@ -68,32 +68,17 @@ public:
         return std::nullopt;
     }
 
-    // FIXME: This should be handled by the catalog
-    std::optional<DataType> getColumnType(const ColumnId& columnId) override {
+    DataType getColumnType(const ColumnId& columnId) override {
         // Find the table for this column
         std::string tableName = columnId.getTableId().getName();
         auto tableIt = tables_.find(tableName);
         if (tableIt == tables_.end()) {
-            return std::nullopt;
+            throw std::runtime_error("Table not found: " + tableName);
         }
 
         // Find the column in the schema
-        for (const auto& colMeta : tableIt->second.schema) {
-            if (colMeta.name == columnId.getName()) {
-                if (colMeta.type == "INT64") {
-                    return DataType::getInt64();
-                } else if (colMeta.type == "INT32") {
-                    return DataType::getInt32();
-                } else if (colMeta.type == "DOUBLE") {
-                    return DataType::getDouble();
-                } else if (colMeta.type == "BOOL") {
-                    return DataType::getBool();
-                } else if (colMeta.type == "STRING") {
-                    return DataType::getString();
-                }
-            }
-        }
-        return std::nullopt;
+        auto colMeta = tableIt->second.schema.getColumn(columnId);
+        return colMeta.type;
     }
 };
 

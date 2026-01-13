@@ -1,7 +1,7 @@
 #pragma once
 
 #include <filesystem>
-#include <mutex>
+#include <memory>
 #include <nlohmann/json.hpp>
 #include <optional>
 #include <string>
@@ -14,115 +14,157 @@ namespace toydb {
 namespace fs = std::filesystem;
 using json = nlohmann::json;
 
-struct ColumnMeta {
+struct ColumnMetadata {
     std::string name;
-    std::string type;
+    DataType type;
     bool nullable = true;
 
-    json to_json() const { return json{{"name", name}, {"type", type}, {"nullable", nullable}}; }
-
-    static ColumnMeta from_json(const json& obj) {
-        return ColumnMeta{obj.at("name").get<std::string>(), obj.at("type").get<std::string>(),
-                          obj.value("nullable", true)};
-    }
+    static ColumnMetadata from_json(const json& obj);
 };
 
 struct FileEntry {
-    std::string path;
+    fs::path path;
     std::optional<int64_t> row_count;
 
-    json to_json() const {
-        json obj;
-        obj["path"] = path;
-        if (row_count)
-            obj["row_count"] = *row_count;
-        return obj;
-    }
-
-    static FileEntry from_json(const json& j) {
-        FileEntry fileEntry;
-        fileEntry.path = j.at("path").get<std::string>();
-        if (j.contains("row_count"))
-            fileEntry.row_count = j.at("row_count").get<int64_t>();
-        return fileEntry;
-    }
+    static FileEntry from_json(const json& obj);
 };
 
+struct Schema {
+    std::unordered_map<ColumnId, ColumnMetadata, ColumnIdHash> columns;
 
-enum struct StorageFormat { PARQUET, CSV};
+    /**
+     * @brief Get column metadata by ColumnId
+     * @throw std::runtime_error if column not found
+     */
+    ColumnMetadata getColumn(const ColumnId& colId) const;
+
+    std::optional<ColumnMetadata> getColumnByName(const std::string& name) const noexcept;
+};
+
+enum struct StorageFormat { PARQUET, CSV };
 
 std::string storageFormatToString(StorageFormat format) noexcept;
 
 std::optional<StorageFormat> storageFormatFromString(const std::string& s) noexcept;
 
-struct TableMeta {
+
+struct TableMetadata {
     std::string name;
     TableId id;
     StorageFormat format;
-    std::vector<ColumnMeta> schema;
+    Schema schema;
     std::vector<FileEntry> files;
-
-    bool hasColumn(const std::string& columnName) const noexcept {
-        for (const auto& colMeta : schema) {
-            if (colMeta.name == columnName) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    json to_json() const;
-
-    static TableMeta from_json(const json& obj);
+    std::unordered_map<std::string, ColumnId> column_map;
 };
 
+class CatalogManifest {
+public:
+    virtual ~CatalogManifest() = default;
+
+    /**
+     * @brief Load the manifest from disk
+     * @return true on success, false on error
+     */
+    virtual bool load() = 0;
+
+    virtual std::vector<std::string> getTableNames() const = 0;
+
+    virtual std::optional<TableMetadata> getTableMetadata(const std::string& name) const = 0;
+
+    virtual std::optional<TableMetadata> getTableMetadata(const TableId& id) const = 0;
+
+    virtual fs::path getManifestPath() const = 0;
+};
+
+class TableHandle;
+
 class Catalog {
-   public:
-    explicit Catalog(fs::path catalog_file_path)
-        : catalog_path(std::move(catalog_file_path)),
-          lock_path(catalog_path.string() + ".lock") {
-        loadOrCreate();
-    }
+public:
+    virtual ~Catalog() = default;
 
-    // Non-copyable
-    Catalog(const Catalog&) = delete;
-    Catalog& operator=(const Catalog&) = delete;
+    virtual std::vector<TableId> listTables() = 0;
 
-    std::vector<std::string> listTables();
+    virtual std::optional<TableId> getTableIdByName(const std::string& name) const noexcept = 0;
 
-    // Get table metadata (returns nullopt if not found)
-    std::optional<TableMeta> getTable(const std::string& name);
+    /**
+     * @brief Get table name by TableId
+     * @throw std::runtime_error if table not found
+     */
+    virtual std::string getTableName(const TableId& id) const = 0;
 
-    // Create a table. If exists, returns false.
-    bool createTable(const TableMeta& meta);
+    /**
+     * @brief Resolve a column name to ColumnId
+     * @throw std::runtime_error if table or column not found
+     */
+    virtual ColumnId resolveColumn(const TableId& tableId, const std::string& columnName) const = 0;
 
-    // Drop table; optionally remove files from disk when remove_files=true
-    bool dropTable(const std::string& name, bool remove_files = false);
+    /**
+     * @brief Get the DataType for a column
+     * @throw std::runtime_error if column not found
+     */
+    virtual DataType getColumnType(const ColumnId& columnId) const = 0;
 
-    // Add files to an existing table (idempotent if identical path exists)
-    bool addFiles(const std::string& tableName, const std::vector<FileEntry>& newFiles);
+    /**
+     * @brief Get a TableHandle for reading/writing table data
+     * @throw std::runtime_error if table not found
+     */
+    virtual std::unique_ptr<TableHandle> getTableHandle(const TableId& tableId) = 0;
+};
 
-    bool discoverDirectoryAsTable(const std::string& table_name, const fs::path& dir,
-                                  StorageFormat format = StorageFormat::PARQUET);
+class CatalogImpl : public Catalog {
+public:
+    explicit CatalogImpl(std::unique_ptr<CatalogManifest> manifest);
 
-    // Update table schema (e.g., after an ALTER or after inspecting a parquet file)
-    bool updateSchema(const std::string& table_name, const std::vector<ColumnMeta>& schema);
+    ~CatalogImpl() override = default;
 
-    // Reload from disk (in case other process updated). Returns true on success.
-    bool reload();
+    std::vector<TableId> listTables() override;
 
-   private:
-    fs::path catalog_path;
-    fs::path lock_path;
-    std::mutex mutex;
-    std::unordered_map<std::string, TableMeta> tables;
+    std::optional<TableId> getTableIdByName(const std::string& name) const noexcept override;
 
-    static TableId makeId(const std::string& name) noexcept;
+    std::string getTableName(const TableId& id) const override;
 
-    // Persist atomically: write tmp and rename
-    void persist_atomic();
+    ColumnId resolveColumn(const TableId& tableId, const std::string& columnName) const override;
 
-    bool loadOrCreate();
+    DataType getColumnType(const ColumnId& columnId) const override;
+
+    std::unique_ptr<TableHandle> getTableHandle(const TableId& tableId) override;
+
+protected:
+    std::unique_ptr<CatalogManifest> manifest_;
+    std::unordered_map<std::string, TableId> name_to_table_id_;
+    std::unordered_map<TableId, TableMetadata, TableIdHash> tables_by_id_;
+
+    void initialize();
+};
+
+class JsonCatalogManifest : public CatalogManifest {
+public:
+    explicit JsonCatalogManifest(fs::path manifest_path)
+        : manifest_path_(std::move(manifest_path)) {}
+
+    bool load() override;
+
+    std::vector<std::string> getTableNames() const override;
+
+    std::optional<TableMetadata> getTableMetadata(const std::string& name) const override;
+
+    std::optional<TableMetadata> getTableMetadata(const TableId& id) const override;
+
+    fs::path getManifestPath() const override { return manifest_path_; }
+
+private:
+    fs::path manifest_path_;
+    std::unordered_map<std::string, TableMetadata> tables_by_name_;
+    std::unordered_map<TableId, TableMetadata, TableIdHash> tables_by_id_;
+    bool loaded_ = false;
+
+    bool parseManifest();
+};
+
+class JsonCatalog : public CatalogImpl {
+public:
+    explicit JsonCatalog(fs::path manifestPath)
+        : CatalogImpl(std::make_unique<JsonCatalogManifest>(std::move(manifestPath))) {}
 };
 
 }  // namespace toydb

@@ -1,6 +1,5 @@
 #include "toydb.hpp"
 #include "parser/query_ast.hpp"
-#include "engine/relation.hpp"
 #include "planner/logical_operator.hpp"
 #include "engine/memory.hpp"
 #include "common/logging.hpp"

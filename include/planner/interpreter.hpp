@@ -15,7 +15,7 @@ class PlaceholderCatalog {
    public:
     virtual ~PlaceholderCatalog() = default;
 
-    virtual std::optional<TableMeta> getTable(const std::string& name) = 0;
+    virtual std::optional<TableMetadata> getTable(const std::string& name) = 0;
 
     /**
      * @brief Resolve a column name to a ColumnId
@@ -26,7 +26,7 @@ class PlaceholderCatalog {
     /**
      * @brief Get the DataType for a column from its ColumnId
      */
-    virtual std::optional<DataType> getColumnType(const ColumnId& columnId) = 0;
+    virtual DataType getColumnType(const ColumnId& columnId) = 0;
 };
 
 struct QueryContext {
@@ -34,7 +34,7 @@ struct QueryContext {
     std::unordered_map<std::string, std::string> aliasToTable;
 
     // Map: table name -> TableMeta
-    std::unordered_map<std::string, TableMeta> tables;
+    std::unordered_map<std::string, TableMetadata> tables;
 
     std::optional<std::string> getCanonicalTableName(const std::string& tableOrAlias) const {
         auto aliasIt = aliasToTable.find(tableOrAlias);

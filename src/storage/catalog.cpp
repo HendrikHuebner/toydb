@@ -1,24 +1,9 @@
-
 #include "storage/catalog.hpp"
-#include <exception>
-#include <filesystem>
+#include "storage/table_handle.hpp"
 #include <fstream>
-#include <iostream>
-#include <mutex>
-#include <nlohmann/json.hpp>
-#include <optional>
-#include <stdexcept>
-#include <string>
-#include <unordered_map>
-#include <vector>
-#include "common/assert.hpp"
 #include "common/logging.hpp"
-#include "storage/lockfile.hpp"
 
 namespace toydb {
-
-namespace fs = std::filesystem;
-using json = nlohmann::json;
 
 std::string storageFormatToString(StorageFormat format) noexcept {
     switch (format) {
@@ -27,7 +12,7 @@ std::string storageFormatToString(StorageFormat format) noexcept {
         case StorageFormat::CSV:
             return "csv";
         default:
-            tdb_unreachable("Unknown storage format");
+            return "unknown";
     }
 }
 
@@ -39,219 +24,257 @@ std::optional<StorageFormat> storageFormatFromString(const std::string& s) noexc
     } else {
         return std::nullopt;
     }
-};
-
-TableId Catalog::makeId(const std::string& name) noexcept {
-    // For now just take the hash of the name
-    std::hash<std::string> hasher;
-    uint64_t id = static_cast<uint64_t>(hasher(name));
-    return TableId{id, name};
 }
 
-std::vector<std::string> Catalog::listTables() {
-    std::lock_guard<std::mutex> l(mutex);
-    std::vector<std::string> out;
-    out.reserve(tables.size());
-    for (auto& kv : tables)
-        out.push_back(kv.first);
-    return out;
+ColumnMetadata ColumnMetadata::from_json(const json& obj) {
+    ColumnMetadata meta;
+    meta.name = obj.at("name").get<std::string>();
+    std::string typeStr = obj.at("type").get<std::string>();
+    auto typeOpt = DataType::fromString(typeStr);
+    if (!typeOpt) {
+        Logger::error("Failed to parse type: {}", typeStr);
+        throw std::runtime_error("Invalid type in ColumnMeta: " + typeStr);
+    }
+    meta.type = *typeOpt;
+    meta.nullable = obj.value("nullable", true);
+    return meta;
 }
 
-std::optional<TableMeta> Catalog::getTable(const std::string& name) {
-    std::lock_guard<std::mutex> l(mutex);
-    auto it = tables.find(name);
-    if (it == tables.end())
-        return std::nullopt;
-    return it->second;
+FileEntry FileEntry::from_json(const json& j) {
+    FileEntry entry;
+    entry.path = j.at("path").get<std::string>();
+    if (j.contains("row_count")) {
+        entry.row_count = j.at("row_count").get<int64_t>();
+    }
+    return entry;
 }
 
-bool Catalog::createTable(const TableMeta& meta) {
-    std::lock_guard<std::mutex> l(mutex);
-    if (tables.count(meta.name))
-        return false;
-    tables[meta.name] = meta;
-    persist_atomic();
-    return true;
+ColumnMetadata Schema::getColumn(const ColumnId& colId) const {
+    auto it = columns.find(colId);
+    if (it != columns.end()) {
+        return it->second;
+    }
+    throw std::runtime_error("Column not found: " + std::to_string(colId.getId()));
 }
 
-bool Catalog::dropTable(const std::string& name, bool remove_files) {
-    std::lock_guard<std::mutex> l(mutex);
-    auto it = tables.find(name);
-    if (it == tables.end())
-        return false;
-    if (remove_files) {
-        for (auto& f : it->second.files) {
-            std::error_code ec;
-            fs::remove(f.path, ec);
-            // ignore errors for now, but log
-            if (ec)
-                Logger::warn("Warning: could not remove {}: {}", f.path, ec.message());
+std::optional<ColumnMetadata> Schema::getColumnByName(const std::string& name) const noexcept {
+    for (const auto& [colId, colMeta] : columns) {
+        if (colMeta.name == name) {
+            return colMeta;
         }
     }
-    tables.erase(it);
-    persist_atomic();
-    return true;
+    return std::nullopt;
 }
 
-bool Catalog::addFiles(const std::string& tableName, const std::vector<FileEntry>& newFiles) {
-    std::lock_guard<std::mutex> l(mutex);
-    auto it = tables.find(tableName);
-    if (it == tables.end())
-        return false;
-    auto& files = it->second.files;
-    // naive de-dup by path
-    std::unordered_map<std::string, bool> present;
-    for (auto& f : files)
-        present[f.path] = true;
-    for (auto& nf : newFiles) {
-        if (!present.count(nf.path))
-            files.push_back(nf);
+CatalogImpl::CatalogImpl(std::unique_ptr<CatalogManifest> manifest) : manifest_(std::move(manifest)) {
+    if (!manifest_->load()) {
+        Logger::error("Failed to load catalog manifest");
+        return;
     }
-    persist_atomic();
-    return true;
+    initialize();
 }
 
-bool Catalog::discoverDirectoryAsTable(const std::string& table_name, const fs::path& dir,
-                                       StorageFormat format) {
-    if (!fs::exists(dir) || !fs::is_directory(dir))
-        return false;
+void CatalogImpl::initialize() {
+    name_to_table_id_.clear();
+    tables_by_id_.clear();
 
-    TableMeta meta;
-    meta.name = table_name;
-    meta.id = makeId(table_name);
-    meta.format = format;
-
-    for (auto& p : fs::directory_iterator(dir)) {
-        if (!fs::is_regular_file(p))
+    auto tableNames = manifest_->getTableNames();
+    for (const auto& name : tableNames) {
+        auto metaOpt = manifest_->getTableMetadata(name);
+        if (!metaOpt) {
             continue;
-        // simple extension-based filter
-        if (format == StorageFormat::PARQUET && p.path().extension() == ".parquet") {
-            FileEntry f;
-            f.path = p.path().string();
-            meta.files.push_back(f);
-        } else if (format == StorageFormat::CSV && p.path().extension() == ".csv") {
-            FileEntry f;
-            f.path = p.path().string();
-            meta.files.push_back(f);
         }
-    }
 
-    std::lock_guard<std::mutex> l(mutex);
-    if (tables.count(table_name))
-        return false;
-    tables[table_name] = meta;
-    persist_atomic();
-    return true;
-}
-
-bool Catalog::updateSchema(const std::string& table_name, const std::vector<ColumnMeta>& schema) {
-    std::lock_guard<std::mutex> l(mutex);
-    auto it = tables.find(table_name);
-    if (it == tables.end())
-        return false;
-    it->second.schema = schema;
-    persist_atomic();
-    return true;
-}
-
-bool Catalog::reload() {
-    std::lock_guard<std::mutex> l(mutex);
-    return loadOrCreate();
-}
-
-void Catalog::persist_atomic() {
-    json root;
-    root["generated_at"] = getCurrentTimeStamp();
-    root["tables"] = json::array();
-    for (auto& kv : tables)
-        root["tables"].push_back(kv.second.to_json());
-
-    // Lock (blocking)
-    Lockfile lf{lock_path};
-    lf.lock();
-
-    auto tmp = catalog_path;
-    tmp += ".tmp";
-    {
-        std::ofstream ofs(tmp.string(), std::ios::trunc);
-        ofs << root.dump(2);
-        ofs.flush();
-        ofs.close();
-    }
-    // Rename (atomic on most OSes)
-    std::error_code ec;
-    fs::rename(tmp, catalog_path, ec);
-    if (ec) {
-        Logger::error("Error writing catalog: {}", ec.message());
+        TableMetadata& meta = *metaOpt;
+        name_to_table_id_[name] = meta.id;
+        tables_by_id_[meta.id] = std::move(meta);
     }
 }
 
-bool Catalog::loadOrCreate() {
-    if (!fs::exists(catalog_path)) {
-        // create empty catalog
-        tables.clear();
-        persist_atomic();
+std::vector<TableId> CatalogImpl::listTables() {
+    std::vector<TableId> tables;
+    tables.reserve(name_to_table_id_.size());
+    for (const auto& [_, tableId] : name_to_table_id_) {
+        tables.push_back(tableId);
+    }
+    return tables;
+}
+
+std::optional<TableId> CatalogImpl::getTableIdByName(const std::string& name) const noexcept {
+    auto it = name_to_table_id_.find(name);
+    if (it != name_to_table_id_.end()) {
+        return it->second;
+    }
+    return std::nullopt;
+}
+
+std::string CatalogImpl::getTableName(const TableId& id) const {
+    auto it = tables_by_id_.find(id);
+    if (it == tables_by_id_.end()) {
+        throw std::runtime_error("Table not found: " + std::to_string(id.getId()));
+    }
+    return it->second.name;
+}
+
+ColumnId CatalogImpl::resolveColumn(const TableId& tableId, const std::string& columnName) const {
+    auto tableIt = tables_by_id_.find(tableId);
+    if (tableIt == tables_by_id_.end()) {
+        throw std::runtime_error("Table not found: " + std::to_string(tableId.getId()));
+    }
+
+    const auto& meta = tableIt->second;
+    auto colIt = meta.column_map.find(columnName);
+    if (colIt != meta.column_map.end()) {
+        return colIt->second;
+    }
+
+    throw std::runtime_error("Column '" + columnName + "' not found in table '" + meta.name + "'");
+}
+
+DataType CatalogImpl::getColumnType(const ColumnId& columnId) const {
+    auto tableIt = tables_by_id_.find(columnId.getTableId());
+    if (tableIt == tables_by_id_.end()) {
+        throw std::runtime_error("Table not found: " + std::to_string(columnId.getTableId().getId()));
+    }
+
+    const auto& meta = tableIt->second;
+    return meta.schema.getColumn(columnId).type;
+}
+
+std::unique_ptr<TableHandle> CatalogImpl::getTableHandle(const TableId& tableId) {
+    auto it = tables_by_id_.find(tableId);
+    if (it == tables_by_id_.end()) {
+        throw std::runtime_error("Table not found: " + std::to_string(tableId.getId()));
+    }
+
+    const auto& meta = it->second;
+    std::vector<fs::path> filePaths;
+    filePaths.reserve(meta.files.size());
+
+    fs::path manifestPath = manifest_->getManifestPath();
+    fs::path baseDir = manifestPath.parent_path();
+    if (baseDir.empty() || !fs::exists(baseDir)) {
+        baseDir = fs::current_path();
+    }
+
+    for (const auto& fileEntry : meta.files) {
+        fs::path filePath = baseDir / fileEntry.path;
+        filePaths.push_back(filePath);
+    }
+
+    std::vector<ColumnMetadata> columns;
+    columns.reserve(meta.schema.columns.size());
+    for (const auto& [_, colMeta] : meta.schema.columns) {
+        columns.push_back(colMeta);
+    }
+
+    return std::make_unique<TableHandle>(meta.id, meta.format, columns, filePaths);
+}
+
+bool JsonCatalogManifest::load() {
+    if (loaded_) {
         return true;
     }
-    std::ifstream ifs(catalog_path.string());
-    if (!ifs)
+
+    if (!fs::exists(manifest_path_)) {
+        Logger::error("Manifest file does not exist: {}", manifest_path_.string());
         return false;
+    }
+
+    return parseManifest();
+}
+
+bool JsonCatalogManifest::parseManifest() {
+    std::ifstream ifs(manifest_path_);
+    if (!ifs) {
+        Logger::error("Failed to open manifest file: {}", manifest_path_.string());
+        return false;
+    }
+
     json root;
     try {
         ifs >> root;
     } catch (const std::exception& e) {
-        Logger::error("Error reading catalog json: {}", e.what());
+        Logger::error("Error parsing manifest JSON: {}", e.what());
         return false;
     }
-    ifs.close();
-    tables.clear();
-    if (root.contains("tables")) {
-        try {
-            for (auto& tj : root.at("tables")) {
-                TableMeta t = TableMeta::from_json(tj);
-                tables[t.name] = t;
-            }
-        } catch (const std::exception& e) {
-            Logger::error("Error parsing catalog json: {}", e.what());
-            return false;
-        }
+
+    if (!root.contains("tables")) {
+        Logger::error("Manifest missing 'tables' field");
+        return false;
     }
+
+    tables_by_name_.clear();
+    tables_by_id_.clear();
+
+    try {
+        for (const auto& tableJson : root.at("tables")) {
+            TableMetadata meta;
+            meta.name = tableJson.at("name").get<std::string>();
+
+            uint64_t idValue = tableJson.at("id").get<uint64_t>();
+            std::string idName = tableJson.at("id_name").get<std::string>();
+            meta.id = TableId{idValue, idName};
+
+            std::string formatStr = tableJson.at("format").get<std::string>();
+            auto formatOpt = storageFormatFromString(formatStr);
+            if (!formatOpt) {
+                Logger::error("Invalid format in manifest: {}", formatStr);
+                return false;
+            }
+            meta.format = *formatOpt;
+
+            if (tableJson.contains("schema")) {
+                uint64_t nextColumnId = 1;
+                for (const auto& colJson : tableJson.at("schema")) {
+                    ColumnMetadata colMeta = ColumnMetadata::from_json(colJson);
+                    ColumnId colId(nextColumnId++, colMeta.name, meta.id);
+                    meta.schema.columns[colId] = colMeta;
+                    meta.column_map[colMeta.name] = colId;
+                }
+            }
+
+            if (tableJson.contains("files")) {
+                for (const auto& fileJson : tableJson.at("files")) {
+                    meta.files.push_back(FileEntry::from_json(fileJson));
+                }
+            }
+
+            tables_by_name_[meta.name] = meta;
+            tables_by_id_[meta.id] = meta;
+        }
+    } catch (const std::exception& e) {
+        Logger::error("Error parsing table metadata: {}", e.what());
+        return false;
+    }
+
+    loaded_ = true;
     return true;
 }
 
-json TableMeta::to_json() const {
-    json obj;
-    obj["name"] = name;
-    obj["id"] = id.getId();
-    obj["id_name"] = id.getName();
-    obj["format"] = storageFormatToString(format);
-    obj["schema"] = json::array();
-    for (auto& c : schema)
-        obj["schema"].push_back(c.to_json());
-    obj["files"] = json::array();
-    for (auto& f : files)
-        obj["files"].push_back(f.to_json());
-    return obj;
+std::vector<std::string> JsonCatalogManifest::getTableNames() const {
+    std::vector<std::string> names;
+    names.reserve(tables_by_name_.size());
+    for (const auto& [name, _] : tables_by_name_) {
+        names.push_back(name);
+    }
+    return names;
 }
 
-TableMeta TableMeta::from_json(const json& obj) {
-    TableMeta table;
-    table.name = obj.at("name").get<std::string>();
-    uint64_t idValue = obj.at("id").get<uint64_t>();
-    std::string idName = obj.at("id_name").get<std::string>();
-    table.id = TableId(idValue, idName);
-    auto formatOpt = storageFormatFromString(obj.at("format").get<std::string>());
-    if (!formatOpt)
-        throw std::runtime_error("Invalid format while parsing table metadata");
-    table.format = *formatOpt;
-    if (obj.contains("schema")) {
-        for (auto& cj : obj.at("schema"))
-            table.schema.push_back(ColumnMeta::from_json(cj));
+std::optional<TableMetadata> JsonCatalogManifest::getTableMetadata(const std::string& name) const {
+    auto it = tables_by_name_.find(name);
+    if (it != tables_by_name_.end()) {
+        return it->second;
     }
-    if (obj.contains("files")) {
-        for (auto& fj : obj.at("files"))
-            table.files.push_back(FileEntry::from_json(fj));
-    }
-    return table;
+    return std::nullopt;
 }
+
+std::optional<TableMetadata> JsonCatalogManifest::getTableMetadata(const TableId& id) const {
+    auto it = tables_by_id_.find(id);
+    if (it != tables_by_id_.end()) {
+        return it->second;
+    }
+    return std::nullopt;
+}
+
 }  // namespace toydb

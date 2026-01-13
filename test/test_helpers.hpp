@@ -51,11 +51,10 @@ public:
     ColumnBuffer createIntColumn(const std::vector<int64_t>& values, uint64_t colId, const std::string& colName) {
         int64Storage_.push_back(values);
 
-        ColumnBuffer col;
-        col.columnId = ColumnId(colId, colName);
-        col.type = DataType::getInt64();
-        col.data = int64Storage_.back().data();
-        col.nullBitmap = nullptr;
+        ColumnId columnId(colId, colName);
+        void* data = int64Storage_.back().data();
+        int64_t capacity = static_cast<int64_t>(values.size());
+        ColumnBuffer col(columnId, DataType::getInt64(), data, capacity, nullptr);
         col.count = static_cast<int64_t>(values.size());
 
         return col;
@@ -64,11 +63,10 @@ public:
     ColumnBuffer createDoubleColumn(const std::vector<double>& values, uint64_t colId, const std::string& colName) {
         doubleStorage_.push_back(values);
 
-        ColumnBuffer col;
-        col.columnId = ColumnId(colId, colName);
-        col.type = DataType::getDouble();
-        col.data = doubleStorage_.back().data();
-        col.nullBitmap = nullptr;
+        ColumnId columnId(colId, colName);
+        void* data = doubleStorage_.back().data();
+        int64_t capacity = static_cast<int64_t>(values.size());
+        ColumnBuffer col(columnId, DataType::getDouble(), data, capacity, nullptr);
         col.count = static_cast<int64_t>(values.size());
 
         return col;
@@ -79,15 +77,7 @@ public:
 
         // TODO: Implement proper string column buffer creation
         // This requires fixed-size storage per string element
-        ColumnBuffer col;
-        col.columnId = ColumnId(colId, colName);
-        col.type = DataType::getString();
-        // col.data = ... // Need to implement string buffer allocation
         throw std::runtime_error("String column creation not implemented");
-        col.nullBitmap = nullptr;
-        col.count = static_cast<int64_t>(values.size());
-
-        return col;
     }
 };
 
@@ -295,11 +285,11 @@ public:
 class MockOperator : public PhysicalOperator {
 private:
     ColumnBufferStorage* storage_;
-    std::vector<RowVectorBuffer> batches_;
+    std::vector<RowVector> batches_;
     size_t currentBatchIndex_;
 
 public:
-    MockOperator(ColumnBufferStorage* storage, std::vector<RowVectorBuffer> batches)
+    MockOperator(ColumnBufferStorage* storage, std::vector<RowVector> batches)
         : storage_(storage)
         , batches_(std::move(batches))
         , currentBatchIndex_(0) {}
@@ -308,12 +298,12 @@ public:
         currentBatchIndex_ = 0;
     }
 
-    int64_t next(RowVectorBuffer& out) override {
+    int64_t next(RowVector& out) override {
         if (currentBatchIndex_ >= batches_.size()) {
             return 0;
         }
 
-        const RowVectorBuffer& batch = batches_[currentBatchIndex_];
+        const RowVector& batch = batches_[currentBatchIndex_];
         for (int64_t i = 0; i < batch.getColumnCount(); ++i) {
             out.addColumn(batch.getColumn(i));
         }
@@ -326,7 +316,7 @@ public:
 
 inline std::unique_ptr<PhysicalOperator> MockOperatorBuilder::build() {
     // Build batches from sequence data
-    std::vector<RowVectorBuffer> batches;
+    std::vector<RowVector> batches;
 
     if (!int64Columns_.empty() || !doubleColumns_.empty()) {
         size_t totalRowCount = 0;
@@ -339,7 +329,7 @@ inline std::unique_ptr<PhysicalOperator> MockOperatorBuilder::build() {
 
         if (batchSizes_.empty()) {
             // Single batch - return all data at once
-            RowVectorBuffer batch;
+            RowVector batch;
 
             // Add all INT64 columns
             for (size_t i = 0; i < int64Columns_.size(); ++i) {
@@ -369,7 +359,7 @@ inline std::unique_ptr<PhysicalOperator> MockOperatorBuilder::build() {
 
                 size_t actualBatchSize = std::min(static_cast<size_t>(batchSize), totalRowCount - rowOffset);
 
-                RowVectorBuffer batch;
+                RowVector batch;
 
                 // Add INT64 columns (slice the vectors)
                 for (size_t colIdx = 0; colIdx < int64Columns_.size(); ++colIdx) {
