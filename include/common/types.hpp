@@ -4,8 +4,9 @@
 #include <fmt/format.h>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
-#include "common/assert.hpp"
+#include <concepts>
 
 namespace toydb {
 
@@ -111,41 +112,13 @@ class DataType {
         return type_ == Type::INT32 || type_ == Type::INT64 || type_ == Type::BOOL;
     }
 
-    int32_t getSize() const noexcept {
-        switch (type_) {
-            case Type::INT32:
-                return 4;
-            case Type::INT64:
-                return 8;
-            case Type::DOUBLE:
-                return 8;
-            case Type::BOOL:
-                return 1;
-            case Type::STRING:
-                return 256;
-            default:
-                tdb_unreachable("Invalid data type: " + toString());
-        }
-    }
+    int32_t getSize() const noexcept;
 
-    std::string toString() const noexcept {
-        switch (type_) {
-            case Type::NULL_CONST:
-                return "NULL";
-            case Type::INT32:
-                return "INT32";
-            case Type::INT64:
-                return "INT64";
-            case Type::DOUBLE:
-                return "DOUBLE";
-            case Type::BOOL:
-                return "BOOL";
-            case Type::STRING:
-                return "STRING";
-            default:
-                return "UNKNOWN";
-        }
-    }
+    int32_t getAlign() const noexcept;
+
+    std::string toString() const noexcept;
+
+    static std::optional<DataType> fromString(const std::string& typeStr) noexcept;
 
     bool operator==(const DataType& other) const noexcept { return type_ == other.type_; }
 
@@ -155,4 +128,48 @@ class DataType {
     Type type_;
 };
 
+using db_int32 = int32_t;
+using db_int64 = int64_t;
+using db_bool = bool;
+using db_double = double;
+using db_string = char[256];
+
+template<typename T>
+concept is_db_type =
+    std::same_as<T, db_int32> ||
+    std::same_as<T, db_int64> ||
+    std::same_as<T, db_bool> ||
+    std::same_as<T, db_double> ||
+    std::same_as<T, db_string>;
+
+/**
+ * @brief Maps database type to DataType enum value
+ */
+template<is_db_type T>
+constexpr DataType getDataTypeFor() noexcept;
+
+template<>
+constexpr DataType getDataTypeFor<db_int32>() noexcept {
+    return DataType::getInt32();
+}
+
+template<>
+constexpr DataType getDataTypeFor<db_int64>() noexcept {
+    return DataType::getInt64();
+}
+
+template<>
+constexpr DataType getDataTypeFor<db_bool>() noexcept {
+    return DataType::getBool();
+}
+
+template<>
+constexpr DataType getDataTypeFor<db_double>() noexcept {
+    return DataType::getDouble();
+}
+
+template<>
+constexpr DataType getDataTypeFor<db_string>() noexcept {
+    return DataType::getString();
+}
 }  // namespace toydb

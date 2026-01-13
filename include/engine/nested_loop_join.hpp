@@ -26,7 +26,7 @@ private:
     memory::BufferManager bufferManager_;
 
     // Materialized left side (build input)
-    std::vector<RowVectorBuffer> materializedLeft_;
+    std::vector<RowVector> materializedLeft_;
 
 public:
     NestedLoopJoinExec(PhysicalOperator* build, PhysicalOperator* probe,
@@ -39,7 +39,7 @@ public:
         probe_->initialize();
     }
 
-    int64_t next(RowVectorBuffer& out) override {
+    int64_t next(RowVector& out) override {
         Logger::debug("NestedLoopJoinExec::next");
 
         materializeBuildInput();
@@ -47,7 +47,7 @@ public:
         int64_t totalOutputRows = 0;
 
         // Scan right side (probe input) in chunks
-        RowVectorBuffer rightVector;
+        RowVector rightVector;
         int64_t rightCount = probe_->next(rightVector);
 
         // TODO: Implement the join logic.
@@ -72,7 +72,7 @@ private:
     void materializeBuildInput() {
         Logger::debug("NestedLoopJoinExec::materializeLeftSide: starting materialization");
 
-        RowVectorBuffer leftBatch;
+        RowVector leftBatch;
         int64_t batchCount = 0;
 
         // Read all batches from the left operator until exhausted
@@ -90,7 +90,7 @@ private:
                          batchCount, rowCount);
 
             // Clear the batch for the next iteration
-            leftBatch = RowVectorBuffer();
+            leftBatch = RowVector();
         }
 
         Logger::debug("NestedLoopJoinExec::materializeLeftSide: completed materialization of {} batches",

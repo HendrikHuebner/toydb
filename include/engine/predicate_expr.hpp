@@ -24,7 +24,7 @@ struct fmt::formatter<toydb::ColumnId> : fmt::formatter<std::string>
 namespace toydb {
 
 // Forward declaration
-class RowVectorBuffer;
+class RowVector;
 
 class PredicateExpr {
 protected:
@@ -46,7 +46,7 @@ public:
     /**
      * @brief Debug assertions to check that the index map matches the location of the columns in the buffer
      */
-    void assertIndexMapValid([[maybe_unused]] const RowVectorBuffer& buffer) const noexcept {
+    void assertIndexMapValid([[maybe_unused]] const RowVector& buffer) const noexcept {
         tdb_assert(static_cast<int64_t>(columnIndexMap_.size()) <= buffer.getColumnCount(),
                    "Buffer column count mismatch: expected at most {}, got {}", columnIndexMap_.size(), buffer.getColumnCount());
         for (const auto& [colId, idx] : columnIndexMap_) {
@@ -60,13 +60,13 @@ public:
     /**
      * @brief Evaluate the predicate over a row buffer
      */
-    virtual PredicateResultVector evaluate(const RowVectorBuffer& buffer) const = 0;
+    virtual PredicateResultVector evaluate(const RowVector& buffer) const = 0;
 
     /**
      * @brief Evaluate predicate for a single row (tuple-by-tuple)
      */
     virtual PredicateValue evaluateRow(
-        const RowVectorBuffer& buffer,
+        const RowVector& buffer,
         int64_t rowIndex) const = 0;
 };
 
@@ -107,7 +107,7 @@ public:
         }
     }
 
-    PredicateResultVector evaluate(const RowVectorBuffer& buffer) const override {
+    PredicateResultVector evaluate(const RowVector& buffer) const override {
         tdb_assert(columnIndex_ >= 0, "Column index not initialized. Call initialize() first.");
         const ColumnBuffer& col = buffer.getColumn(columnIndex_);
         PredicateResultVector result(col.count);
@@ -121,13 +121,13 @@ public:
     }
 
     PredicateValue evaluateRow(
-            const RowVectorBuffer& buffer,
+            const RowVector& buffer,
             int64_t rowIndex) const override {
         tdb_assert(columnIndex_ >= 0, "Column index not initialized. Call initialize() first.");
         const ColumnBuffer& col = buffer.getColumn(columnIndex_);
 
         // Check for null
-        if (col.nullBitmap && (col.nullBitmap[rowIndex / 8] & (1 << (rowIndex % 8))) == 0) {
+        if (col.isNull(rowIndex)) {
             return PredicateValue::NULL_VALUE;
         }
         return PredicateValue::TRUE;
@@ -182,7 +182,7 @@ public:
         return type_ == DataType::getNullConst();
     }
 
-    PredicateResultVector evaluate(const RowVectorBuffer& buffer) const override {
+    PredicateResultVector evaluate(const RowVector& buffer) const override {
         int64_t rowCount = buffer.getRowCount();
         PredicateResultVector result(rowCount);
 
@@ -200,7 +200,7 @@ public:
     }
 
     PredicateValue evaluateRow(
-        [[maybe_unused]] const RowVectorBuffer& buffer,
+        [[maybe_unused]] const RowVector& buffer,
         [[maybe_unused]] int64_t rowIndex) const override {
         return isNull() ? PredicateValue::NULL_VALUE : PredicateValue::TRUE;
     }
@@ -228,12 +228,12 @@ public:
         expr_->initializeIndexMap(nextIndex);
     }
 
-    PredicateResultVector evaluate(const RowVectorBuffer& buffer) const override {
+    PredicateResultVector evaluate(const RowVector& buffer) const override {
         // TODO: Implement cast
         return expr_->evaluate(buffer);
     }
 
-    PredicateValue evaluateRow(const RowVectorBuffer& buffer, int64_t rowIndex) const override {
+    PredicateValue evaluateRow(const RowVector& buffer, int64_t rowIndex) const override {
         return expr_->evaluateRow(buffer, rowIndex);
     }
 };
@@ -280,21 +280,8 @@ private:
 
         return result ? PredicateValue::TRUE : PredicateValue::FALSE;
     }
-
     template<typename T>
-    T getValue(const ColumnBuffer& col, int64_t rowIndex, bool& isNull) const {
-        isNull = false;
-        if (col.nullBitmap && (col.nullBitmap[rowIndex / 8] & (1 << (rowIndex % 8))) == 0) {
-            isNull = true;
-            return T{};
-        }
-
-        T* data = static_cast<T*>(col.data);
-        return data[rowIndex];
-    }
-
-    template<typename T>
-    bool extractValue(PredicateExpr* expr, const RowVectorBuffer& buffer,
+    bool extractValue(PredicateExpr* expr, const RowVector& buffer,
                       int64_t rowIndex, T& value, bool& isNull) const {
         if (auto* colRef = dynamic_cast<ColumnRefExpr*>(expr)) {
             // ColumnRefExpr stores its index directly
@@ -303,7 +290,7 @@ private:
             const ColumnBuffer& col = buffer.getColumn(colIdx);
 
             // Check null bitmap
-            if (col.nullBitmap && (col.nullBitmap[rowIndex / 8] & (1 << (rowIndex % 8))) == 0) {
+            if (col.isNull(rowIndex)) {
                 isNull = true;
                 return false;
             }
@@ -311,15 +298,13 @@ private:
             // Extract value based on type
             if constexpr (std::is_same_v<T, int64_t>) {
                 if (col.type == DataType::getInt64()) {
-                    int64_t* data = static_cast<int64_t*>(col.data);
-                    value = data[rowIndex];
+                    value = col.getEntry<db_int64>(rowIndex);
                     isNull = false;
                     return true;
                 }
             } else if constexpr (std::is_same_v<T, double>) {
                 if (col.type == DataType::getDouble()) {
-                    double* data = static_cast<double*>(col.data);
-                    value = data[rowIndex];
+                    value = col.getEntry<db_double>(rowIndex);
                     isNull = false;
                     return true;
                 }
@@ -353,7 +338,7 @@ private:
     }
 
     PredicateValue evaluateComparison(
-            const RowVectorBuffer& buffer,
+            const RowVector& buffer,
             int64_t rowIndex) const {
         // Use the stored type to directly extract and compare values
         if (type_ == DataType::getInt64()) {
@@ -400,7 +385,7 @@ public:
         return right_.get();
     }
 
-    PredicateResultVector evaluate(const RowVectorBuffer& buffer) const override {
+    PredicateResultVector evaluate(const RowVector& buffer) const override {
         assertIndexMapValid(buffer);
 
         int64_t rowCount = buffer.getRowCount();
@@ -415,7 +400,7 @@ public:
     }
 
     PredicateValue evaluateRow(
-            const RowVectorBuffer& buffer,
+            const RowVector& buffer,
             int64_t rowIndex) const override {
         return evaluateComparison(buffer, rowIndex);
     }
@@ -489,7 +474,7 @@ public:
         return right_.get();
     }
 
-    PredicateResultVector evaluate(const RowVectorBuffer& buffer) const override {
+    PredicateResultVector evaluate(const RowVector& buffer) const override {
         assertIndexMapValid(buffer);
         
         PredicateResultVector leftResult = left_->evaluate(buffer);
@@ -507,7 +492,7 @@ public:
     }
 
     PredicateValue evaluateRow(
-        const RowVectorBuffer& buffer,
+        const RowVector& buffer,
         int64_t rowIndex) const override {
         PredicateValue leftVal = left_->evaluateRow(buffer, rowIndex);
         PredicateValue rightVal = right_->evaluateRow(buffer, rowIndex);

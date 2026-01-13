@@ -1,83 +1,148 @@
 #pragma once
 
 #include <cstdint>
+#include <cstring>
+#include <span>
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include "common/assert.hpp"
 #include "common/types.hpp"
 
 namespace toydb {
 
-class ColumnBuffer {
-   public:
-    ColumnId columnId;
-    DataType type;
-    void* data;
-    uint8_t* nullBitmap;
-    int64_t count; // number of rows in the column
+class NullBitmap {
+public:
+    NullBitmap() : bitmap_(nullptr) {}
+    explicit NullBitmap(uint8_t* bitmap) : bitmap_(bitmap) {}
 
     bool isNull(int64_t index) const noexcept {
-        if (!nullBitmap) {
-            return false;
-        }
-        return (nullBitmap[index / 8] & (1 << (index % 8))) == 0;
+        if (!bitmap_) return false;
+        return (bitmap_[index / 8] & (1 << (index % 8))) == 0;
     }
 
-    int32_t getInt32(int64_t index) const {
-        tdb_assert(type == DataType::getInt32(), "Column type is not INT32");
-        tdb_assert(index >= 0 && index < count, "Index out of range");
-        if (isNull(index)) {
-            return 0;
+    void setNull(int64_t index) noexcept {
+        if (bitmap_) {
+            bitmap_[index / 8] &= ~(1 << (index % 8));
         }
-        int32_t* dataPtr = static_cast<int32_t*>(data);
-        return dataPtr[index];
     }
 
-    int64_t getInt64(int64_t index) const {
-        tdb_assert(type == DataType::getInt64(), "Column type is not INT64");
-        tdb_assert(index >= 0 && index < count, "Index out of range");
-        if (isNull(index)) {
-            return 0;
+    void clearNull(int64_t index) noexcept {
+        if (bitmap_) {
+            bitmap_[index / 8] |= (1 << (index % 8));
         }
-        int64_t* dataPtr = static_cast<int64_t*>(data);
-        return dataPtr[index];
     }
 
-    double getDouble(int64_t index) const {
-        tdb_assert(type == DataType::getDouble(), "Column type is not DOUBLE");
-        tdb_assert(index >= 0 && index < count, "Index out of range");
-        if (isNull(index)) {
-            return 0.0;
+    void setAllNull(int64_t count) noexcept {
+        if (bitmap_) {
+            std::memset(bitmap_, 0, (count + 7) / 8);
         }
-        double* dataPtr = static_cast<double*>(data);
-        return dataPtr[index];
     }
 
-    bool getBool(int64_t index) const {
-        tdb_assert(type == DataType::getBool(), "Column type is not BOOL");
-        tdb_assert(index >= 0 && index < count, "Index out of range");
-        if (isNull(index)) {
-            return false;
+    void clearAllNull(int64_t count) noexcept {
+        if (bitmap_) {
+            std::memset(bitmap_, 0xFF, (count + 7) / 8);
         }
-        bool* dataPtr = static_cast<bool*>(data);
-        return dataPtr[index];
     }
 
-    std::string getString(int64_t index) const {
-        tdb_assert(type == DataType::getString(), "Column type is not STRING");
+    uint8_t* data() noexcept { return bitmap_; }
+    const uint8_t* data() const noexcept { return bitmap_; }
+
+private:
+    uint8_t* bitmap_;
+};
+
+class ColumnBuffer {
+   public:
+    ColumnBuffer() : columnId{}, type{}, count{0}, data_{nullptr}, nullBitmap_{}, capacity_{0} {}
+
+    ColumnBuffer(ColumnId colId, DataType type, void* data, int64_t capacity, uint8_t* nullBitmap = nullptr)
+        : columnId{std::move(colId)}, type{type}, count{0}, data_{data}, nullBitmap_{nullBitmap}, capacity_{capacity} {}
+
+    static int64_t calculateCapacity(size_t dataSize, DataType type) noexcept {
+        int32_t typeSize = type.getSize();
+        if (typeSize == 0) return 0;
+        return static_cast<int64_t>(dataSize / static_cast<size_t>(typeSize));
+    }
+
+    static size_t calculateDataSize(int64_t capacity, DataType type) noexcept {
+        return static_cast<size_t>(capacity) * static_cast<size_t>(type.getSize());
+    }
+
+    ColumnId columnId;
+    DataType type;
+    int64_t count; // number of rows in the column
+
+    int64_t getCapacity() const noexcept {
+        return capacity_;
+    }
+
+    bool isNull(int64_t index) const noexcept {
+        return nullBitmap_.isNull(index);
+    }
+
+    void setNull(int64_t index) noexcept {
+        nullBitmap_.setNull(index);
+    }
+
+    void clearNull(int64_t index) noexcept {
+        nullBitmap_.clearNull(index);
+    }
+
+    template<is_db_type T>
+    std::span<T> getDataAs() const {
+        tdb_assert(type == getDataTypeFor<T>(), "Column type mismatch");
+        if constexpr (std::same_as<T, db_string>) {
+            // For string arrays, we need to handle char[256] specially
+            // Return span of first element, caller must handle stride manually
+            tdb_unreachable("getDataAs<db_string> not supported, use getEntryAt instead");
+        } else {
+            T* dataPtr = static_cast<T*>(data_);
+            return std::span<T>(dataPtr, static_cast<size_t>(capacity_));
+        }
+    }
+
+    template<is_db_type T>
+    const T& getEntry(int64_t index) const {
+        tdb_assert(type == getDataTypeFor<T>(), "Column type mismatch");
         tdb_assert(index >= 0 && index < count, "Index out of range");
-        if (isNull(index)) {
-            return "";
+        if constexpr (std::same_as<T, db_string>) {
+            const char* dataPtr = static_cast<const char*>(data_);
+            return *reinterpret_cast<const db_string*>(dataPtr + (index * 256));
+        } else {
+            const T* dataPtr = static_cast<const T*>(data_);
+            return dataPtr[index];
         }
-        // STRING is stored as fixed-size char[256] per element
-        const char* dataPtr = static_cast<const char*>(data);
-        const char* strPtr = dataPtr + (index * 256);
-        // Find null terminator or take up to 256 chars
-        size_t len = 0;
-        while (len < 256 && strPtr[len] != '\0') {
-            ++len;
+    }
+
+    template<is_db_type T>
+    T& getEntry(int64_t index) {
+        tdb_assert(type == getDataTypeFor<T>(), "Column type mismatch");
+        tdb_assert(index >= 0 && index < count, "Index out of range");
+        if constexpr (std::same_as<T, db_string>) {
+            char* dataPtr = static_cast<char*>(data_);
+            return *reinterpret_cast<db_string*>(dataPtr + (index * sizeof(db_string)));
+        } else {
+            T* dataPtr = static_cast<T*>(data_);
+            return dataPtr[index];
         }
-        return std::string(strPtr, len);
+    }
+
+    template<is_db_type T>
+    void writeEntry(int64_t index, const T& value) {
+        tdb_assert(type == getDataTypeFor<T>(), "Column type mismatch");
+        tdb_assert(index >= 0 && index < capacity_, "Index out of range");
+        if constexpr (std::same_as<T, db_string>) {
+            char* dataPtr = static_cast<char*>(data_);
+            char* strPtr = dataPtr + (index * sizeof(db_string));
+            std::memcpy(strPtr, value, sizeof(db_string));
+        } else {
+            T* dataPtr = static_cast<T*>(data_);
+            dataPtr[index] = value;
+        }
+        if (index >= count) {
+            count = index + 1;
+        }
     }
 
     std::string getValueAsString(int64_t index) const {
@@ -87,15 +152,15 @@ class ColumnBuffer {
 
         switch (type.getType()) {
             case DataType::Type::INT32:
-                return std::to_string(getInt32(index));
+                return std::to_string(getEntry<db_int32>(index));
             case DataType::Type::INT64:
-                return std::to_string(getInt64(index));
+                return std::to_string(getEntry<db_int64>(index));
             case DataType::Type::DOUBLE:
-                return std::to_string(getDouble(index));
+                return std::to_string(getEntry<db_double>(index));
             case DataType::Type::BOOL:
-                return getBool(index) ? "true" : "false";
+                return getEntry<db_bool>(index) ? "true" : "false";
             case DataType::Type::STRING:
-                return "'" + getString(index) + "'";
+                return "'" + std::string(getEntry<db_string>(index)) + "'";
             case DataType::Type::NULL_CONST:
                 return "NULL";
             default:
@@ -126,9 +191,14 @@ class ColumnBuffer {
         result += "]";
         return result;
     }
+
+private:
+    void* data_;
+    NullBitmap nullBitmap_;
+    int64_t capacity_;
 };
 
-class RowVectorBuffer {
+class RowVector {
     std::vector<ColumnBuffer> columns_;
     std::unordered_map<ColumnId, int64_t, ColumnIdHash> columnIdToIndex_;
     int64_t rowCount_;
@@ -312,7 +382,7 @@ class RowVectorBuffer {
 class PhysicalOperator {
     public:
     virtual void initialize() = 0;
-    virtual int64_t next(RowVectorBuffer& out) = 0;
+    virtual int64_t next(RowVector& out) = 0;
     virtual ~PhysicalOperator() {};
 };
 
