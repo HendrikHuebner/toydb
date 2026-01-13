@@ -40,6 +40,7 @@ enum class TokenType {
     KeySelect,
     KeyFrom,
     KeyWhere,
+    KeyAs,
     KeyJoin,
     KeyOn,
     KeyOrder,

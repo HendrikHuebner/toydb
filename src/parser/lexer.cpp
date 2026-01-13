@@ -23,6 +23,7 @@ const std::unordered_map<std::string, TokenType> keywords = [](){
         {"WHERE", TokenType::KeyWhere},
         {"JOIN", TokenType::KeyJoin},
         {"ON", TokenType::KeyOn},
+        {"AS", TokenType::KeyAs},
         {"ORDER", TokenType::KeyOrder},
         {"BY", TokenType::KeyBy},
         {"INSERT", TokenType::KeyInsert},
@@ -388,6 +389,7 @@ std::string Token::toString() const noexcept {
         case TokenType::KeySelect: return "SELECT";
         case TokenType::KeyFrom: return "FROM";
         case TokenType::KeyWhere: return "WHERE";
+        case TokenType::KeyAs: return "AS";
         case TokenType::KeyCreate: return "CREATE";
         case TokenType::KeyTable: return "TABLE";
         case TokenType::KeyJoin: return "JOIN";

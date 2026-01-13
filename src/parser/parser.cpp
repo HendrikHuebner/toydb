@@ -274,8 +274,14 @@ std::unique_ptr<ast::SelectFrom> Parser::parseSelect() {
 
             auto [table, column] = parseQualifiedColumnRef("column name");
 
-            // TODO: Support column aliases (AS keyword)
-            selectFrom->columns.emplace_back(table, column, "");
+            std::string alias{};
+            if (ts.peek().type == TokenType::KeyAs) {
+                ts.next();
+                token = parseIdentifier("column alias");
+                alias = token.getString();
+            }
+
+            selectFrom->columns.emplace_back(table, column, alias);
         }
 
         if (selectFrom->columns.empty()) {
@@ -300,9 +306,15 @@ std::unique_ptr<ast::SelectFrom> Parser::parseSelect() {
         firstTable = false;
 
         token = parseIdentifier("table name");
-        // TODO: Support table aliases (AS keyword)
+
         ast::Table table(token.getString());
         selectFrom->tables.emplace_back(table);
+
+        if (ts.peek().type == TokenType::KeyAs) {
+            ts.next();
+            token = parseIdentifier("table alias");
+            table.alias = token.getString();
+        }
     }
 
     if (selectFrom->tables.empty()) {
