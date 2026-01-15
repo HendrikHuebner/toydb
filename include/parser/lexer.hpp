@@ -52,8 +52,11 @@ enum class TokenType {
     KeyTable,
 
     KeyBoolType,
-    KeyIntType,
+    KeyIntegerType,
+    KeyBigintType,
+    KeyDoubleType,
     KeyCharType,
+    KeyStringType,
 
     Asterisk,
     Quote,

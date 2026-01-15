@@ -252,7 +252,6 @@ std::unique_ptr<ast::SelectFrom> Parser::parseSelect() {
     expectToken(TokenType::KeySelect, "SELECT statement");
 
     // TODO: Support DISTINCT keyword
-    // TODO: Support column aliases (AS keyword)
     auto selectFrom = std::make_unique<ast::SelectFrom>();
 
     // Parse column list or *
@@ -308,13 +307,14 @@ std::unique_ptr<ast::SelectFrom> Parser::parseSelect() {
         token = parseIdentifier("table name");
 
         ast::Table table(token.getString());
-        selectFrom->tables.emplace_back(table);
 
         if (ts.peek().type == TokenType::KeyAs) {
             ts.next();
             token = parseIdentifier("table alias");
             table.alias = token.getString();
         }
+
+        selectFrom->tables.emplace_back(table);
     }
 
     if (selectFrom->tables.empty()) {
@@ -330,9 +330,15 @@ std::unique_ptr<ast::SelectFrom> Parser::parseSelect() {
 }
 
 DataType parseDataType(Token token, size_t line, size_t pos) {
-    if (token.type == TokenType::KeyIntType)
+    if (token.type == TokenType::KeyIntegerType)
         return DataType::getInt32();
+    if (token.type == TokenType::KeyBigintType)
+        return DataType::getInt64();
+    if (token.type == TokenType::KeyDoubleType)
+        return DataType::getDouble();
     if (token.type == TokenType::KeyCharType)
+        return DataType::getString();
+    if (token.type == TokenType::KeyStringType)
         return DataType::getString();
     if (token.type == TokenType::KeyBoolType)
         return DataType::getBool();

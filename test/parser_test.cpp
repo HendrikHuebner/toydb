@@ -391,18 +391,18 @@ TEST_F(ParserTest, CreateTable) {
     };
     auto createTable = makeCreateTable("users", std::move(columns));
     QueryAST expected(createTable.release());
-    testSuccessfulParse("CREATE TABLE users (id INT, name CHAR, age INT, active BOOL)", expected);
+    testSuccessfulParse("CREATE TABLE users (id INTEGER, name CHAR, age INTEGER, active BOOL)", expected);
 }
 
 TEST_F(ParserTest, CreateTableSingleColumn) {
     std::vector<std::pair<std::string, DataType>> columns = {{"id", DataType::getInt32()}};
     auto createTable = makeCreateTable("users", std::move(columns));
     QueryAST expected(createTable.release());
-    testSuccessfulParse("CREATE TABLE users (id INT)", expected);
+    testSuccessfulParse("CREATE TABLE users (id INTEGER)", expected);
 }
 
 TEST_F(ParserTest, CreateTableMissingName) {
-    testFailedParse("CREATE TABLE (id INT)", "Expected table name");
+    testFailedParse("CREATE TABLE (id INTEGER)", "Expected table name");
 }
 
 TEST_F(ParserTest, CreateTableMissingColumns) {
