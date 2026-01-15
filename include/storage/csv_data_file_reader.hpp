@@ -28,6 +28,10 @@ public:
 
     ~CsvDataFileReader() override = default;
 
+    /**
+     * @brief Read a batch of rows from the CSV file. RowVector must be pre-allocated
+     * and initialized with the correct schema. Assertion failure / UB otherwise.
+     */
     int64_t readBatch(RowVector& out, int64_t requestedRows = 8192) override;
 
     bool hasMore() const noexcept override;
