@@ -247,7 +247,8 @@ LogicalQueryPlan SQLInterpreter::handleSelectFrom(const ast::SelectFrom& selectF
     // Collect all columns for TableScanOp
     std::vector<ColumnId> scanColumns;
     for (const auto& [_, tableMeta] : context.tables) {
-        for (const auto& [colId, _] : tableMeta.schema.columns) {
+        const auto& columnIds = tableMeta.schema.getColumnIds();
+        for (const auto& colId : columnIds) {
             scanColumns.push_back(colId);
         }
     }

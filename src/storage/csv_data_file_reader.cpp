@@ -26,6 +26,27 @@ void CsvDataFileReader::reset() {
     eof_ = false;
 }
 
+// Peek next character in file stream until non linebreak is reached
+static bool hasNonEmptyLine(std::ifstream& file) {
+    if (!file.is_open() || !file.good()) {
+        return false;
+    }
+    
+    file.clear();
+    
+    int c;
+    while ((c = file.peek()) != EOF) {
+        if (c == '\n' || c == '\r') {
+            file.get();
+            continue;
+        } else {
+            return true;
+        }
+    }
+    
+    return false;
+}
+
 bool CsvDataFileReader::hasMore() const noexcept {
     return !eof_ && file_.is_open() && file_.good();
 }
@@ -96,13 +117,15 @@ int64_t CsvDataFileReader::readBatch(RowVector& out, int64_t requestedRows) {
     }
 
     // Verify ColumnBuffers exist and have sufficient capacity
-    tdb_assert(out.getColumnCount() == static_cast<int64_t>(schema_.columns.size()),
+    const auto& columnIds = schema_.getColumnIds();
+    tdb_assert(out.getColumnCount() == static_cast<int64_t>(columnIds.size()),
         "RowVector column count ({}) does not match schema column count ({})",
-        out.getColumnCount(), schema_.columns.size());
+        out.getColumnCount(), columnIds.size());
 
     std::vector<ColumnBuffer*> columnBuffers;
     size_t colIdx = 0;
-    for (const auto& [colId, colMeta] : schema_.columns) {
+    for (const auto& colId : columnIds) {
+        [[maybe_unused]] const auto& colMeta = schema_.getColumn(colId);
         tdb_assert(colIdx < static_cast<size_t>(out.getColumnCount()),
             "Column index {} out of range", colIdx);
 
@@ -124,19 +147,21 @@ int64_t CsvDataFileReader::readBatch(RowVector& out, int64_t requestedRows) {
 
     int64_t rowsRead = 0;
     std::string line;
+
     while (rowsRead < requestedRows && std::getline(file_, line)) {
         if (line.empty()) {
             continue;
         }
 
         std::vector<std::string> fields = parseCSVLine(line);
-        if (fields.size() != schema_.columns.size()) {
-            Logger::warn("CSV line has {} fields, expected {}: {}", fields.size(), schema_.columns.size(), line);
+        if (fields.size() != columnIds.size()) {
+            Logger::warn("CSV line has {} fields, expected {}: {}", fields.size(), columnIds.size(), line);
             continue;
         }
 
         colIdx = 0;
-        for (const auto& [colId, colMeta] : schema_.columns) {
+        for (const auto& colId : columnIds) {
+            const auto& colMeta = schema_.getColumn(colId);
             ColumnBuffer& colBuf = *columnBuffers[colIdx];
 
             switch (colMeta.type.getType()) {
@@ -177,7 +202,7 @@ int64_t CsvDataFileReader::readBatch(RowVector& out, int64_t requestedRows) {
 
     out.setRowCount(rowsRead);
 
-    if (!file_.good()) {
+    if (!hasNonEmptyLine(file_)) {
         eof_ = true;
     }
 

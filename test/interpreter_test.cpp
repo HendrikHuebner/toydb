@@ -31,17 +31,22 @@ public:
         meta.format = StorageFormat::PARQUET;
 
         std::unordered_map<std::string, ColumnId> tableColumns;
+        std::vector<ColumnId> columnIds;
+        std::unordered_map<ColumnId, ColumnMetadata, ColumnIdHash> columnsById;
+        
         for (const auto& [colName, colType] : columns) {
             ColumnId colId(nextColumnId_++, colName, meta.id);
             tableColumns[colName] = colId;
+            columnIds.push_back(colId);
 
             ColumnMetadata colMeta;
             colMeta.name = colName;
             colMeta.type = colType;
             colMeta.nullable = true;
-            meta.schema.columns[colId] = colMeta;
+            columnsById[colId] = colMeta;
         }
-
+        
+        meta.schema = Schema(std::move(columnIds), std::move(columnsById));
         tables_[tableName] = meta;
         columnMap_[tableName] = tableColumns;
     }

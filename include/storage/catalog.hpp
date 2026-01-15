@@ -29,8 +29,17 @@ struct FileEntry {
     static FileEntry from_json(const json& obj);
 };
 
-struct Schema {
-    std::unordered_map<ColumnId, ColumnMetadata, ColumnIdHash> columns;
+class Schema {
+    std::vector<ColumnId> columnIds;
+    std::unordered_map<ColumnId, ColumnMetadata, ColumnIdHash> columnsById;
+
+    public:
+
+    Schema() noexcept = default;
+    Schema(std::vector<ColumnId> columnIds, std::unordered_map<ColumnId, ColumnMetadata, ColumnIdHash> columnsById)
+        : columnIds(std::move(columnIds)), columnsById(std::move(columnsById)) {}
+
+    std::vector<ColumnId> getColumnIds() const noexcept { return columnIds; }
 
     /**
      * @brief Get column metadata by ColumnId
@@ -39,6 +48,11 @@ struct Schema {
     ColumnMetadata getColumn(const ColumnId& colId) const;
 
     std::optional<ColumnMetadata> getColumnByName(const std::string& name) const noexcept;
+
+    void addColumn(const ColumnId& colId, const ColumnMetadata& colMeta) noexcept {
+        columnIds.push_back(colId);
+        columnsById[colId] = colMeta;
+    }
 };
 
 enum struct StorageFormat { PARQUET, CSV };

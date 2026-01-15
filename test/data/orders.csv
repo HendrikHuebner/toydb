@@ -1,11 +1,11 @@
-id,user_id,order_date,total_amount,status,shipping_address
-1,1,2023-11-01,1299.99,completed,"123 Main St, New York, NY 10001"
-2,2,2023-11-05,89.99,completed,"456 Oak Ave, Los Angeles, CA 90001"
-3,3,2023-11-10,329.98,completed,"789 Pine Rd, Chicago, IL 60601"
-4,1,2023-11-15,29.99,completed,"123 Main St, New York, NY 10001"
-5,4,2023-11-20,399.99,processing,"321 Elm St, Seattle, WA 98101"
-6,5,2023-11-22,79.99,completed,"654 Maple Dr, Boston, MA 02101"
-7,6,2023-11-25,249.99,shipped,"987 Cedar Ln, San Francisco, CA 94101"
-8,2,2023-11-28,199.99,completed,"456 Oak Ave, Los Angeles, CA 90001"
-9,7,2023-12-01,299.99,processing,"147 Birch Way, Austin, TX 78701"
-10,8,2023-12-05,12.99,completed,"258 Spruce St, Miami, FL 33101"
+id,user_id,order_date,total_amount,status,shipping_address,discount_percent
+1,1,2023-11-01,1299.99,completed,"123 Main St, New York, NY 10001",10
+2,2,2023-11-05,89.99,completed,"456 Oak Ave, Los Angeles, CA 90001",NULL
+3,3,2023-11-10,329.98,completed,"789 Pine Rd, Chicago, IL 60601",5
+4,1,2023-11-15,29.99,completed,"123 Main St, New York, NY 10001",NULL
+5,4,2023-11-20,399.99,processing,"321 Elm St, Seattle, WA 98101",15
+6,5,2023-11-22,79.99,completed,"654 Maple Dr, Boston, MA 02101",NULL
+7,6,2023-11-25,249.99,shipped,"987 Cedar Ln, San Francisco, CA 94101",0
+8,2,2023-11-28,199.99,completed,"456 Oak Ave, Los Angeles, CA 90001",NULL
+9,7,2023-12-01,299.99,processing,"147 Birch Way, Austin, TX 78701",20
+10,8,2023-12-05,12.99,completed,"258 Spruce St, Miami, FL 33101",NULL

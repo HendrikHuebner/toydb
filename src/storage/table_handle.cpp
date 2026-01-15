@@ -7,13 +7,18 @@ namespace toydb {
 TableHandle::~TableHandle() = default;
 
 std::unique_ptr<DataFileReader> TableHandle::createFileReader(const std::filesystem::path& filePath) {
-    Schema schema;
+    std::vector<ColumnId> columnIds;
+    std::unordered_map<ColumnId, ColumnMetadata, ColumnIdHash> columnsById;
+
     for (const auto& colMeta : schema_) {
         std::hash<std::string> colHasher;
         uint64_t colIdValue = static_cast<uint64_t>(colHasher(colMeta.name));
         ColumnId colId(colIdValue, colMeta.name, table_id_);
-        schema.columns[colId] = colMeta;
+        columnIds.push_back(colId);
+        columnsById[colId] = colMeta;
     }
+
+    Schema schema(std::move(columnIds), std::move(columnsById));
 
     switch (format_) {
         case StorageFormat::CSV:

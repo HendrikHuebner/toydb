@@ -6,6 +6,6 @@ id,name,email,age,city,created_at
 5,Edward Norton,edward.norton@email.com,31,Boston,2023-05-12
 6,Fiona Apple,fiona.apple@email.com,26,San Francisco,2023-06-18
 7,George Washington,george.washington@email.com,45,Austin,2023-07-22
-8,Hannah Montana,hannah.montana@email.com,24,Miami,2023-08-30
+8,Hannah Montana,hannah.montana@email.com,24,NULL,2023-08-30
 9,Ian Fleming,ian.fleming@email.com,38,Denver,2023-09-14
 10,Jane Doe,jane.doe@email.com,33,Portland,2023-10-08

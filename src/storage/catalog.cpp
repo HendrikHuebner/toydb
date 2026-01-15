@@ -50,15 +50,15 @@ FileEntry FileEntry::from_json(const json& j) {
 }
 
 ColumnMetadata Schema::getColumn(const ColumnId& colId) const {
-    auto it = columns.find(colId);
-    if (it != columns.end()) {
+    auto it = columnsById.find(colId);
+    if (it != columnsById.end()) {
         return it->second;
     }
     throw std::runtime_error("Column not found: " + std::to_string(colId.getId()));
 }
 
 std::optional<ColumnMetadata> Schema::getColumnByName(const std::string& name) const noexcept {
-    for (const auto& [colId, colMeta] : columns) {
+    for (const auto& [colId, colMeta] : columnsById) {
         if (colMeta.name == name) {
             return colMeta;
         }
@@ -163,9 +163,10 @@ std::unique_ptr<TableHandle> CatalogImpl::getTableHandle(const TableId& tableId)
     }
 
     std::vector<ColumnMetadata> columns;
-    columns.reserve(meta.schema.columns.size());
-    for (const auto& [_, colMeta] : meta.schema.columns) {
-        columns.push_back(colMeta);
+    const auto& columnIds = meta.schema.getColumnIds();
+    columns.reserve(columnIds.size());
+    for (const auto& colId : columnIds) {
+        columns.push_back(meta.schema.getColumn(colId));
     }
 
     return std::make_unique<TableHandle>(meta.id, meta.format, columns, filePaths);
@@ -226,12 +227,18 @@ bool JsonCatalogManifest::parseManifest() {
 
             if (tableJson.contains("schema")) {
                 uint64_t nextColumnId = 1;
+                std::vector<ColumnId> columnIds;
+                std::unordered_map<ColumnId, ColumnMetadata, ColumnIdHash> columnsById;
+
                 for (const auto& colJson : tableJson.at("schema")) {
                     ColumnMetadata colMeta = ColumnMetadata::from_json(colJson);
                     ColumnId colId(nextColumnId++, colMeta.name, meta.id);
-                    meta.schema.columns[colId] = colMeta;
+                    columnIds.push_back(colId);
+                    columnsById[colId] = colMeta;
                     meta.column_map[colMeta.name] = colId;
                 }
+
+                meta.schema = Schema(std::move(columnIds), std::move(columnsById));
             }
 
             if (tableJson.contains("files")) {

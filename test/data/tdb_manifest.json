@@ -10,8 +10,8 @@
         {"name": "id", "type": "INT64", "nullable": false},
         {"name": "name", "type": "STRING", "nullable": false},
         {"name": "email", "type": "STRING", "nullable": false},
-        {"name": "age", "type": "INT64", "nullable": false},
-        {"name": "city", "type": "STRING", "nullable": false},
+        {"name": "age", "type": "INT32", "nullable": false},
+        {"name": "city", "type": "STRING", "nullable": true},
         {"name": "created_at", "type": "STRING", "nullable": false}
       ],
       "files": [
@@ -29,7 +29,8 @@
         {"name": "price", "type": "DOUBLE", "nullable": false},
         {"name": "category", "type": "STRING", "nullable": false},
         {"name": "stock_quantity", "type": "INT64", "nullable": false},
-        {"name": "description", "type": "STRING", "nullable": false}
+        {"name": "description", "type": "STRING", "nullable": false},
+        {"name": "featured", "type": "BOOL", "nullable": false}
       ],
       "files": [
         {"path": "products.csv", "row_count": 10}
@@ -46,7 +47,8 @@
         {"name": "order_date", "type": "STRING", "nullable": false},
         {"name": "total_amount", "type": "DOUBLE", "nullable": false},
         {"name": "status", "type": "STRING", "nullable": false},
-        {"name": "shipping_address", "type": "STRING", "nullable": false}
+        {"name": "shipping_address", "type": "STRING", "nullable": false},
+        {"name": "discount_percent", "type": "INT32", "nullable": true}
       ],
       "files": [
         {"path": "orders.csv", "row_count": 10}
