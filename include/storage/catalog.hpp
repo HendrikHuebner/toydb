@@ -1,5 +1,6 @@
 #pragma once
 
+#include <expected>
 #include <filesystem>
 #include <memory>
 #include <nlohmann/json.hpp>
@@ -13,6 +14,12 @@ namespace toydb {
 
 namespace fs = std::filesystem;
 using json = nlohmann::json;
+
+enum class CatalogError {
+    TABLE_NOT_FOUND,
+    COLUMN_NOT_FOUND,
+    INVALID_COLUMN_ID
+};
 
 struct ColumnMetadata {
     std::string name;
@@ -43,9 +50,9 @@ class Schema {
 
     /**
      * @brief Get column metadata by ColumnId
-     * @throw std::runtime_error if column not found
+     * @return ColumnMetadata on success, CatalogError::COLUMN_NOT_FOUND on failure
      */
-    ColumnMetadata getColumn(const ColumnId& colId) const;
+    std::expected<ColumnMetadata, CatalogError> getColumn(const ColumnId& colId) const noexcept;
 
     std::optional<ColumnMetadata> getColumnByName(const std::string& name) const noexcept;
 
@@ -102,27 +109,27 @@ public:
 
     /**
      * @brief Get table name by TableId
-     * @throw std::runtime_error if table not found
+     * @return Table name on success, CatalogError::TABLE_NOT_FOUND on failure
      */
-    virtual std::string getTableName(const TableId& id) const = 0;
+    virtual std::expected<std::string, CatalogError> getTableName(const TableId& id) const noexcept = 0;
 
     /**
      * @brief Resolve a column name to ColumnId
-     * @throw std::runtime_error if table or column not found
+     * @return ColumnId on success, CatalogError::TABLE_NOT_FOUND or CatalogError::COLUMN_NOT_FOUND on failure
      */
-    virtual ColumnId resolveColumn(const TableId& tableId, const std::string& columnName) const = 0;
+    virtual std::expected<ColumnId, CatalogError> resolveColumn(const TableId& tableId, const std::string& columnName) const noexcept = 0;
 
     /**
      * @brief Get the DataType for a column
-     * @throw std::runtime_error if column not found
+     * @return DataType on success, CatalogError::COLUMN_NOT_FOUND or CatalogError::TABLE_NOT_FOUND on failure
      */
-    virtual DataType getColumnType(const ColumnId& columnId) const = 0;
+    virtual std::expected<DataType, CatalogError> getColumnType(const ColumnId& columnId) const noexcept = 0;
 
     /**
      * @brief Get a TableHandle for reading/writing table data
-     * @throw std::runtime_error if table not found
+     * @return TableHandle on success, CatalogError::TABLE_NOT_FOUND on failure
      */
-    virtual std::unique_ptr<TableHandle> getTableHandle(const TableId& tableId) = 0;
+    virtual std::expected<std::unique_ptr<TableHandle>, CatalogError> getTableHandle(const TableId& tableId) noexcept = 0;
 };
 
 class CatalogImpl : public Catalog {
@@ -135,13 +142,13 @@ public:
 
     std::optional<TableId> getTableIdByName(const std::string& name) const noexcept override;
 
-    std::string getTableName(const TableId& id) const override;
+    std::expected<std::string, CatalogError> getTableName(const TableId& id) const noexcept override;
 
-    ColumnId resolveColumn(const TableId& tableId, const std::string& columnName) const override;
+    std::expected<ColumnId, CatalogError> resolveColumn(const TableId& tableId, const std::string& columnName) const noexcept override;
 
-    DataType getColumnType(const ColumnId& columnId) const override;
+    std::expected<DataType, CatalogError> getColumnType(const ColumnId& columnId) const noexcept override;
 
-    std::unique_ptr<TableHandle> getTableHandle(const TableId& tableId) override;
+    std::expected<std::unique_ptr<TableHandle>, CatalogError> getTableHandle(const TableId& tableId) noexcept override;
 
 protected:
     std::unique_ptr<CatalogManifest> manifest_;

@@ -60,11 +60,12 @@ protected:
        const auto& columnIds = schema.getColumnIds();
         for (const auto& colId : columnIds) {
             const auto& colMeta = schema.getColumn(colId);
-            size_t dataSize = ColumnBuffer::calculateDataSize(capacity, colMeta.type);
+            tdb_assert(colMeta, "Column {} not found in schema", colId.getId());
+            size_t dataSize = ColumnBuffer::calculateDataSize(capacity, colMeta->type);
             rowVectorDataStorage_.emplace_back(dataSize);
             rowVectorNullBitmapStorage_.emplace_back((capacity + 7) / 8, 0xFF);
 
-            ColumnBuffer colBuf(colId, colMeta.type, rowVectorDataStorage_.back().data(), capacity, rowVectorNullBitmapStorage_.back().data());
+            ColumnBuffer colBuf(colId, colMeta->type, rowVectorDataStorage_.back().data(), capacity, rowVectorNullBitmapStorage_.back().data());
             rowVec.addColumn(colBuf);
         }
 

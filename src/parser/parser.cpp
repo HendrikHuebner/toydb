@@ -2,24 +2,18 @@
 #include <limits>
 #include <memory>
 #include <sstream>
-#include <stdexcept>
 #include <string>
 #include <vector>
 #include "common/assert.hpp"
 #include "common/debug.hpp"
+#include "common/errors.hpp"
 #include "common/logging.hpp"
+#include "common/errors.hpp"
 #include "parser/lexer.hpp"
 #include "parser/query_ast.hpp"
 
 namespace toydb {
 namespace parser {
-
-class ParserException : public std::runtime_error {
-   public:
-    ParserException(const std::string& message, size_t line, size_t position)
-        : std::runtime_error(message + " at line " + std::to_string(line) + ", position " +
-                             std::to_string(position)) {}
-};
 
 /**
  * Parses an identifier token and returns it.
@@ -29,7 +23,7 @@ Token Parser::parseIdentifier(const std::string& context) {
     auto token = ts.next();
     if (token.type != TokenType::IdentifierType) {
         throw ParserException("Expected " + context + ", but got " + token.toString(),
-                              ts.getCurrentLineNumber(), ts.getLinePosition());
+                              ts.getCurrentLineNumber(), ts.getLinePosition(), ts.getQuery());
     }
     return token;
 }
@@ -67,7 +61,7 @@ void Parser::expectToken(TokenType expected, const std::string& context) {
     auto token = ts.peek();
     if (token.type != expected) {
         throw ParserException("Expected " + context + ", but got " + token.toString(),
-                              ts.getCurrentLineNumber(), ts.getLinePosition());
+                              ts.getCurrentLineNumber(), ts.getLinePosition(), ts.getQuery());
     }
     ts.next();
 }
@@ -219,7 +213,7 @@ std::unique_ptr<ast::Expression> Parser::parseTerm() {
     }
 
     throw ParserException("Expected term but got " + token.toString(), ts.getCurrentLineNumber(),
-                          ts.getLinePosition());
+                          ts.getLinePosition(), ts.getQuery());
 }
 
 /**
@@ -237,7 +231,7 @@ std::unique_ptr<ast::Expression> Parser::parseWhere() {
     auto expr = parseExpression();
     if (!expr) {
         throw ParserException("Expected expression after WHERE", ts.getCurrentLineNumber(),
-                              ts.getLinePosition());
+                              ts.getLinePosition(), ts.getQuery());
     }
     return expr;
 }
@@ -285,7 +279,7 @@ std::unique_ptr<ast::SelectFrom> Parser::parseSelect() {
 
         if (selectFrom->columns.empty()) {
             throw ParserException("SELECT must have at least one column or *",
-                                  ts.getCurrentLineNumber(), ts.getLinePosition());
+                                  ts.getCurrentLineNumber(), ts.getLinePosition(), ts.getQuery());
         }
     }
 
@@ -319,7 +313,7 @@ std::unique_ptr<ast::SelectFrom> Parser::parseSelect() {
 
     if (selectFrom->tables.empty()) {
         throw ParserException("SELECT must have at least one table",
-                              ts.getCurrentLineNumber(), ts.getLinePosition());
+                              ts.getCurrentLineNumber(), ts.getLinePosition(), ts.getQuery());
     }
 
     selectFrom->where = parseWhere();
@@ -329,7 +323,7 @@ std::unique_ptr<ast::SelectFrom> Parser::parseSelect() {
     return selectFrom;
 }
 
-DataType parseDataType(Token token, size_t line, size_t pos) {
+DataType Parser::parseDataType(Token token, size_t line, size_t pos) {
     if (token.type == TokenType::KeyIntegerType)
         return DataType::getInt32();
     if (token.type == TokenType::KeyBigintType)
@@ -342,7 +336,7 @@ DataType parseDataType(Token token, size_t line, size_t pos) {
         return DataType::getString();
     if (token.type == TokenType::KeyBoolType)
         return DataType::getBool();
-    throw ParserException("Unknown data type: " + token.toString(), line, pos);
+    throw ParserException("Unknown data type: " + token.toString(), line, pos, ts.getQuery());
 }
 
 std::unique_ptr<ast::CreateTable> Parser::parseCreateTable() {
@@ -370,7 +364,7 @@ std::unique_ptr<ast::CreateTable> Parser::parseCreateTable() {
         } else if (ts.peek().type != TokenType::ParenthesisR) {
             throw ParserException(
                 "Expected comma or closing parenthesis, but got " + ts.peek().toString(),
-                ts.getCurrentLineNumber(), ts.getLinePosition());
+                ts.getCurrentLineNumber(), ts.getLinePosition(), ts.getQuery());
         }
     }
 
@@ -440,7 +434,7 @@ std::unique_ptr<ast::Insert> Parser::parseInsertInto() {
 
         if (insert->columnNames.size() > 0 && insert->columnNames.size() != row.size()) {
             throw ParserException("Number of entries in tuple does not match column list",
-                                  ts.getCurrentLineNumber(), ts.getLinePosition());
+                                  ts.getCurrentLineNumber(), ts.getLinePosition(), ts.getQuery());
         }
 
         expectToken(TokenType::ParenthesisR, "value list");
@@ -462,7 +456,7 @@ std::unique_ptr<ast::Update> Parser::parseUpdate() {
     Token token = ts.next();
     if (token.type != TokenType::IdentifierType) {
         throw ParserException("Expected table name, but got " + token.toString(),
-                              ts.getCurrentLineNumber(), ts.getLinePosition());
+                              ts.getCurrentLineNumber(), ts.getLinePosition(), ts.getQuery());
     }
 
     auto tableName = token.getString();

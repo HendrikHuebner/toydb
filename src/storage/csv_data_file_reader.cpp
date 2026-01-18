@@ -31,9 +31,9 @@ static bool hasNonEmptyLine(std::ifstream& file) {
     if (!file.is_open() || !file.good()) {
         return false;
     }
-    
+
     file.clear();
-    
+
     int c;
     while ((c = file.peek()) != EOF) {
         if (c == '\n' || c == '\r') {
@@ -43,7 +43,7 @@ static bool hasNonEmptyLine(std::ifstream& file) {
             return true;
         }
     }
-    
+
     return false;
 }
 
@@ -126,6 +126,7 @@ int64_t CsvDataFileReader::readBatch(RowVector& out, int64_t requestedRows) {
     size_t colIdx = 0;
     for (const auto& colId : columnIds) {
         [[maybe_unused]] const auto& colMeta = schema_.getColumn(colId);
+        tdb_assert(colMeta, "Column {} not found in schema", colId.getId());
         tdb_assert(colIdx < static_cast<size_t>(out.getColumnCount()),
             "Column index {} out of range", colIdx);
 
@@ -134,9 +135,9 @@ int64_t CsvDataFileReader::readBatch(RowVector& out, int64_t requestedRows) {
         tdb_assert(colBuf.columnId == colId,
             "Column {} mismatch: expected {}, got {}",
             colIdx, colId.getId(), colBuf.columnId.getId());
-        tdb_assert(colBuf.type == colMeta.type,
+        tdb_assert(colBuf.type == colMeta->type,
             "Column {} type mismatch: expected {}, got {}",
-            colIdx, colMeta.type.toString(), colBuf.type.toString());
+            colIdx, colMeta->type.toString(), colBuf.type.toString());
         tdb_assert(colBuf.getCapacity() >= requestedRows,
             "Column {} capacity ({}) insufficient for requested rows ({})",
             colIdx, colBuf.getCapacity(), requestedRows);
@@ -162,9 +163,11 @@ int64_t CsvDataFileReader::readBatch(RowVector& out, int64_t requestedRows) {
         colIdx = 0;
         for (const auto& colId : columnIds) {
             const auto& colMeta = schema_.getColumn(colId);
+            tdb_assert(colMeta, "Column {} not found in schema", colId.getId());
+
             ColumnBuffer& colBuf = *columnBuffers[colIdx];
 
-            switch (colMeta.type.getType()) {
+            switch (colMeta->type.getType()) {
                 case DataType::Type::INT32:
                     parseAndWriteValue<db_int32>(fields[colIdx], colBuf, rowsRead);
                     break;

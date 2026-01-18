@@ -1,7 +1,8 @@
 #include "planner/interpreter.hpp"
 #include "engine/predicate_expr.hpp"
+#include "common/errors.hpp"
 #include "common/logging.hpp"
-#include <stdexcept>
+#include "storage/catalog.hpp"
 #include <cctype>
 
 namespace toydb {
@@ -15,14 +16,14 @@ static QueryContext buildSelectContext(const ast::SelectFrom& selectFrom, Placeh
 
         auto tableMeta = catalog->getTable(tableName);
         if (!tableMeta.has_value()) {
-            throw std::runtime_error("Table '" + tableName + "' not found");
+            throw UnresolvedColumnException("Table '" + tableName + "' not found");
         }
 
         context.tables[tableName] = *tableMeta;
 
         if (!tableAlias.empty()) {
             if (context.aliasToTable.find(tableAlias) != context.aliasToTable.end()) {
-                throw std::runtime_error("Duplicate alias '" + tableAlias + "'");
+                throw InternalSQLError("Duplicate alias '" + tableAlias + "'");
             }
             context.aliasToTable[tableAlias] = tableName;
         }
@@ -41,12 +42,12 @@ ColumnId SQLInterpreter::resolveColumnRef(const ast::ColumnRef& columnRef, const
     if (!tableQualifier.empty()) {
         auto actualTableName = context.getCanonicalTableName(tableQualifier);
         if (!actualTableName.has_value()) {
-            throw std::runtime_error("Table or alias '" + tableQualifier + "' not found");
+            throw UnresolvedColumnException("Table or alias '" + tableQualifier + "' not found");
         }
 
         auto columnId = catalog_->resolveColumn(*actualTableName, columnName);
         if (!columnId.has_value()) {
-            throw std::runtime_error("Column '" + columnName + "' not found in table '" + *actualTableName + "'");
+            throw UnresolvedColumnException("Column '" + columnName + "' not found in table '" + *actualTableName + "'");
         }
 
         return *columnId;
@@ -62,7 +63,7 @@ ColumnId SQLInterpreter::resolveColumnRef(const ast::ColumnRef& columnRef, const
     }
 
     if (matchingTables.empty()) {
-        throw std::runtime_error("Column '" + columnName + "' not found in any available table");
+        throw UnresolvedColumnException("Column '" + columnName + "' not found in any available table");
     }
 
     if (matchingTables.size() > 1) {
@@ -71,14 +72,14 @@ ColumnId SQLInterpreter::resolveColumnRef(const ast::ColumnRef& columnRef, const
             if (i > 0) error += ", ";
             error += matchingTables[i];
         }
-        throw std::runtime_error(error);
+        throw UnresolvedColumnException(error);
     }
 
     // Exactly one match
     const std::string& actualTableName = matchingTables[0];
     auto columnId = catalog_->resolveColumn(actualTableName, columnName);
     if (!columnId.has_value()) {
-        throw std::runtime_error("Column '" + columnName + "' not found in table '" + actualTableName + "'");
+        throw UnresolvedColumnException("Column '" + columnName + "' not found in table '" + actualTableName + "'");
     }
 
     return *columnId;
@@ -98,7 +99,7 @@ std::unique_ptr<PredicateExpr> SQLInterpreter::lowerConstant(const ast::Constant
         // Booleans are ints of size 1
         return std::make_unique<ConstantExpr>(DataType::getBool(), constBool->value);
     } else {
-        throw std::runtime_error("Unknown constant type");
+        throw InternalSQLError("Unknown constant type");
     }
 }
 
@@ -110,13 +111,13 @@ std::unique_ptr<PredicateExpr> SQLInterpreter::lowerPredicate(const ast::Express
         return std::make_unique<ColumnRefExpr>(colId, colType);
     } else if (auto* constant = dynamic_cast<const ast::Constant*>(expr)) {
         if (auto* constString = dynamic_cast<const ast::ConstantString*>(constant)) {
-            throw std::runtime_error("Unexpected string literal in predicate: " + constString->value);
+            throw UnresolvedColumnException("Unexpected string literal in predicate: " + constString->value);
         }
         return lowerConstant(constant);
     } else if (auto* condition = dynamic_cast<const ast::Condition*>(expr)) {
         return lowerCondition(condition, context);
     } else {
-        throw std::runtime_error("Unsupported expression type in WHERE clause");
+        throw InternalSQLError("Unsupported expression type in WHERE clause");
     }
 }
 
@@ -145,13 +146,13 @@ static DataType getCommonType(const DataType& left, const DataType& right) {
     } else if (left.isIntegral() && right == DataType::getBool()) {
         return left;
     } else {
-        throw std::runtime_error("Unsupported operand types for binary operation");
+        throw InternalSQLError("Unsupported operand types for binary operation");
     }
 }
 
 std::unique_ptr<PredicateExpr> SQLInterpreter::lowerCondition(const ast::Condition* condition, const QueryContext& context) {
     if (condition->isUnop()) {
-        throw std::runtime_error("unary operator is NYI");
+        throw NotYetImplementedError("unary operator");
     }
 
     // Binary operator
@@ -174,7 +175,7 @@ std::unique_ptr<PredicateExpr> SQLInterpreter::lowerCondition(const ast::Conditi
         } else if (auto leftConstant = dynamic_cast<ConstantExpr*>(left.get())) {
             leftType = leftConstant->getType();
         } else {
-            throw std::runtime_error("Left operand must be a column reference or a constant");
+            throw InternalSQLError("Left operand must be a column reference or a constant");
         }
 
         if (auto rightColumnRef = dynamic_cast<ColumnRefExpr*>(right.get())) {
@@ -182,7 +183,7 @@ std::unique_ptr<PredicateExpr> SQLInterpreter::lowerCondition(const ast::Conditi
         } else if (auto rightConstant = dynamic_cast<ConstantExpr*>(right.get())) {
             rightType = rightConstant->getType();
         } else {
-            throw std::runtime_error("Right operand must be a column reference or a constant");
+            throw InternalSQLError("Right operand must be a column reference or a constant");
         }
 
         DataType compareType = getCommonType(leftType, rightType);
@@ -234,12 +235,12 @@ std::optional<LogicalQueryPlan> SQLInterpreter::interpret(const ast::QueryAST& a
 LogicalQueryPlan SQLInterpreter::handleSelectFrom(const ast::SelectFrom& selectFrom) {
     // Verify we have at least one table
     if (selectFrom.tables.empty()) {
-        throw std::runtime_error("SELECT query must have at least one table");
+        throw InternalSQLError("SELECT query must have at least one table");
     }
 
     if (selectFrom.tables.size() > 1) {
         // TODO: Implement joins
-        throw std::runtime_error("Multiple tables (joins) not yet supported");
+        throw NotYetImplementedError("Multiple tables (joins)");
     }
 
     QueryContext context = buildSelectContext(selectFrom, catalog_);

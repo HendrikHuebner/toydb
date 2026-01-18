@@ -2,6 +2,8 @@
 
 #include <cassert>
 #include <cctype>
+#include <string>
+#include "common/types.hpp"
 #include "parser/lexer.hpp"
 #include "parser/query_ast.hpp"
 
@@ -34,6 +36,8 @@ class Parser {
     std::unique_ptr<ast::Update> parseUpdate();
 
     std::unique_ptr<ast::CreateTable> parseCreateTable();
+
+    DataType parseDataType(Token token, size_t line, size_t pos);
 
 public:
     Parser(std::string_view query) noexcept : ts(query) {}

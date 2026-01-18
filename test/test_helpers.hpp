@@ -3,6 +3,7 @@
 #include "engine/physical_operator.hpp"
 #include "planner/logical_operator.hpp"
 #include "engine/predicate_expr.hpp"
+#include "common/errors.hpp"
 #include "common/types.hpp"
 #include "parser/query_ast.hpp"
 #include <vector>
@@ -77,7 +78,7 @@ public:
 
         // TODO: Implement proper string column buffer creation
         // This requires fixed-size storage per string element
-        throw std::runtime_error("String column creation not implemented");
+        throw NotYetImplementedError("String column creation");
     }
 };
 

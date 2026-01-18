@@ -1,6 +1,8 @@
 #include "storage/catalog.hpp"
+#include "common/errors.hpp"
 #include "storage/table_handle.hpp"
 #include <fstream>
+#include "common/assert.hpp"
 #include "common/logging.hpp"
 
 namespace toydb {
@@ -33,7 +35,7 @@ ColumnMetadata ColumnMetadata::from_json(const json& obj) {
     auto typeOpt = DataType::fromString(typeStr);
     if (!typeOpt) {
         Logger::error("Failed to parse type: {}", typeStr);
-        throw std::runtime_error("Invalid type in ColumnMeta: " + typeStr);
+        throw nlohmann::json::type_error::create(0, "Invalid type in ColumnMeta: " + typeStr, &obj);
     }
     meta.type = *typeOpt;
     meta.nullable = obj.value("nullable", true);
@@ -49,12 +51,12 @@ FileEntry FileEntry::from_json(const json& j) {
     return entry;
 }
 
-ColumnMetadata Schema::getColumn(const ColumnId& colId) const {
+std::expected<ColumnMetadata, CatalogError> Schema::getColumn(const ColumnId& colId) const noexcept {
     auto it = columnsById.find(colId);
     if (it != columnsById.end()) {
         return it->second;
     }
-    throw std::runtime_error("Column not found: " + std::to_string(colId.getId()));
+    return std::unexpected(CatalogError::COLUMN_NOT_FOUND);
 }
 
 std::optional<ColumnMetadata> Schema::getColumnByName(const std::string& name) const noexcept {
@@ -108,18 +110,18 @@ std::optional<TableId> CatalogImpl::getTableIdByName(const std::string& name) co
     return std::nullopt;
 }
 
-std::string CatalogImpl::getTableName(const TableId& id) const {
+std::expected<std::string, CatalogError> CatalogImpl::getTableName(const TableId& id) const noexcept {
     auto it = tables_by_id_.find(id);
     if (it == tables_by_id_.end()) {
-        throw std::runtime_error("Table not found: " + std::to_string(id.getId()));
+        return std::unexpected(CatalogError::TABLE_NOT_FOUND);
     }
     return it->second.name;
 }
 
-ColumnId CatalogImpl::resolveColumn(const TableId& tableId, const std::string& columnName) const {
+std::expected<ColumnId, CatalogError> CatalogImpl::resolveColumn(const TableId& tableId, const std::string& columnName) const noexcept {
     auto tableIt = tables_by_id_.find(tableId);
     if (tableIt == tables_by_id_.end()) {
-        throw std::runtime_error("Table not found: " + std::to_string(tableId.getId()));
+        return std::unexpected(CatalogError::TABLE_NOT_FOUND);
     }
 
     const auto& meta = tableIt->second;
@@ -128,23 +130,27 @@ ColumnId CatalogImpl::resolveColumn(const TableId& tableId, const std::string& c
         return colIt->second;
     }
 
-    throw std::runtime_error("Column '" + columnName + "' not found in table '" + meta.name + "'");
+    return std::unexpected(CatalogError::COLUMN_NOT_FOUND);
 }
 
-DataType CatalogImpl::getColumnType(const ColumnId& columnId) const {
+std::expected<DataType, CatalogError> CatalogImpl::getColumnType(const ColumnId& columnId) const noexcept {
     auto tableIt = tables_by_id_.find(columnId.getTableId());
     if (tableIt == tables_by_id_.end()) {
-        throw std::runtime_error("Table not found: " + std::to_string(columnId.getTableId().getId()));
+        return std::unexpected(CatalogError::TABLE_NOT_FOUND);
     }
 
     const auto& meta = tableIt->second;
-    return meta.schema.getColumn(columnId).type;
+    auto colResult = meta.schema.getColumn(columnId);
+    if (!colResult.has_value()) {
+        return std::unexpected(colResult.error());
+    }
+    return colResult->type;
 }
 
-std::unique_ptr<TableHandle> CatalogImpl::getTableHandle(const TableId& tableId) {
+std::expected<std::unique_ptr<TableHandle>, CatalogError> CatalogImpl::getTableHandle(const TableId& tableId) noexcept {
     auto it = tables_by_id_.find(tableId);
     if (it == tables_by_id_.end()) {
-        throw std::runtime_error("Table not found: " + std::to_string(tableId.getId()));
+        return std::unexpected(CatalogError::TABLE_NOT_FOUND);
     }
 
     const auto& meta = it->second;
@@ -166,7 +172,10 @@ std::unique_ptr<TableHandle> CatalogImpl::getTableHandle(const TableId& tableId)
     const auto& columnIds = meta.schema.getColumnIds();
     columns.reserve(columnIds.size());
     for (const auto& colId : columnIds) {
-        columns.push_back(meta.schema.getColumn(colId));
+        auto colResult = meta.schema.getColumn(colId);
+        if (!colResult)
+            return std::unexpected(colResult.error());
+        columns.push_back(*colResult);
     }
 
     return std::make_unique<TableHandle>(meta.id, meta.format, columns, filePaths);

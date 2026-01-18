@@ -4,6 +4,7 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include "common/errors.hpp"
 #include "parser/query_ast.hpp"
 #include "planner/logical_operator.hpp"
 #include "storage/catalog.hpp"
@@ -81,19 +82,19 @@ class SQLInterpreter {
     LogicalQueryPlan handleSelectFrom(const ast::SelectFrom& selectFrom);
 
     LogicalQueryPlan handleCreateTable([[maybe_unused]] const ast::CreateTable& createTable) {
-        throw std::runtime_error("CREATE TABLE not yet implemented");
+        throw NotYetImplementedError("CREATE TABLE");
     }
 
     LogicalQueryPlan handleInsert([[maybe_unused]] const ast::Insert& insert) {
-        throw std::runtime_error("INSERT not yet implemented");
+        throw NotYetImplementedError("INSERT");
     }
 
     LogicalQueryPlan handleUpdate([[maybe_unused]] const ast::Update& update) {
-        throw std::runtime_error("UPDATE not yet implemented");
+        throw NotYetImplementedError("UPDATE");
     }
 
     LogicalQueryPlan handleDelete([[maybe_unused]] const ast::Delete& deleteStmt) {
-        throw std::runtime_error("DELETE not yet implemented");
+        throw NotYetImplementedError("DELETE");
     }
 };
 

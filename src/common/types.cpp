@@ -20,6 +20,23 @@ int32_t DataType::getSize() const noexcept {
     }
 }
 
+int32_t DataType::getAlign() const noexcept {
+    switch (type_) {
+        case Type::INT32:
+            return alignof(db_int32);
+        case Type::INT64:
+            return alignof(db_int64);
+        case Type::DOUBLE:
+            return alignof(db_double);
+        case Type::BOOL:
+            return alignof(db_bool);
+        case Type::STRING:
+            return alignof(db_string);
+        default:
+            tdb_unreachable("Invalid data type: " + toString());
+    }
+}
+
 std::string DataType::toString() const noexcept {
     switch (type_) {
         case Type::NULL_CONST:

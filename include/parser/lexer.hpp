@@ -127,6 +127,8 @@ class TokenStream {
      */
     bool empty() noexcept;
 
+    std::string_view getQuery() const noexcept { return query; }
+
     std::string_view getCurrentLine() const noexcept {
         return query.substr(lineStart, std::max(query.size() - 1, position + 1));
     }
