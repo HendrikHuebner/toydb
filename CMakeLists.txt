@@ -20,6 +20,9 @@ find_package(spdlog REQUIRED)
 find_package(fmt REQUIRED)
 find_package(nlohmann_json REQUIRED)
 
+# Optionally find libunwind for stack traces
+find_package(libunwind QUIET)
+
 include_directories(${CMAKE_SOURCE_DIR}/include)
 file(GLOB_RECURSE DB_SOURCES src/*.cpp)
 file(GLOB_RECURSE DB_HEADERS include/*.hpp)
@@ -38,6 +41,11 @@ target_link_libraries(toydb PRIVATE spdlog::spdlog fmt::fmt arrow parquet nlohma
 target_compile_options(toydb PRIVATE
     -Wall -Wextra -Wpedantic -Werror -Wno-gnu-zero-variadic-macro-arguments
 )
+
+add_executable(repl src/repl.cpp)
+target_link_libraries(repl PRIVATE toydb)
+target_link_options(repl PRIVATE -fuse-ld=${TDB_USE_LINKER})
+target_include_directories(repl PRIVATE ${CMAKE_SOURCE_DIR}/include)
 
 enable_testing()
 add_subdirectory(test)

@@ -472,7 +472,6 @@ TEST_F(InterpreterTest, AmbiguousColumnError) {
 }
 
 TEST_F(InterpreterTest, AmbiguousColumnResolvedWithQualified) {
-    // Add a second table with overlapping column names
     catalog_->addTable("orders", {
         {"id", DataType::getInt32()},
         {"user_id", DataType::getInt32()},
