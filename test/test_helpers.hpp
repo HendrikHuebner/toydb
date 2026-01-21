@@ -55,7 +55,7 @@ public:
         ColumnId columnId(colId, colName);
         void* data = int64Storage_.back().data();
         int64_t capacity = static_cast<int64_t>(values.size());
-        ColumnBuffer col(columnId, DataType::getInt64(), data, capacity, nullptr);
+        ColumnBuffer col(columnId, DataType::getInt64(), data, capacity);
         col.count = static_cast<int64_t>(values.size());
 
         return col;
@@ -67,7 +67,7 @@ public:
         ColumnId columnId(colId, colName);
         void* data = doubleStorage_.back().data();
         int64_t capacity = static_cast<int64_t>(values.size());
-        ColumnBuffer col(columnId, DataType::getDouble(), data, capacity, nullptr);
+        ColumnBuffer col(columnId, DataType::getDouble(), data, capacity);
         col.count = static_cast<int64_t>(values.size());
 
         return col;

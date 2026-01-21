@@ -253,7 +253,7 @@ TEST_F(PredicateTest, ColumnComparison) {
     static std::vector<int64_t> intData = {10, 20, 30, 40, 50};
     ColumnId columnId(0, "col0");
     void* data = intData.data();
-    ColumnBuffer col(columnId, DataType::getInt64(), data, 5, nullptr);
+    ColumnBuffer col(columnId, DataType::getInt64(), data, 5);
     col.count = 5;
 
     RowVector buffer;
@@ -281,15 +281,15 @@ TEST_F(PredicateTest, ComplexNestedPredicateWithColumnIndexMap) {
     static std::vector<int64_t> col2Data = {100, 200, 300, 400, 500};
 
     ColumnId col0Id(0, "col0");
-    ColumnBuffer col0(col0Id, DataType::getInt64(), col0Data.data(), 5, nullptr);
+    ColumnBuffer col0(col0Id, DataType::getInt64(), col0Data.data(), 5);
     col0.count = 5;
 
     ColumnId col1Id(1, "col1");
-    ColumnBuffer col1(col1Id, DataType::getInt64(), col1Data.data(), 5, nullptr);
+    ColumnBuffer col1(col1Id, DataType::getInt64(), col1Data.data(), 5);
     col1.count = 5;
 
     ColumnId col2Id(2, "col2");
-    ColumnBuffer col2(col2Id, DataType::getInt64(), col2Data.data(), 5, nullptr);
+    ColumnBuffer col2(col2Id, DataType::getInt64(), col2Data.data(), 5);
     col2.count = 5;
 
     // Create buffer with only the columns referenced by the predicate

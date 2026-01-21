@@ -65,7 +65,8 @@ protected:
             rowVectorDataStorage_.emplace_back(dataSize);
             rowVectorNullBitmapStorage_.emplace_back((capacity + 7) / 8, 0xFF);
 
-            ColumnBuffer colBuf(colId, colMeta->type, rowVectorDataStorage_.back().data(), capacity, rowVectorNullBitmapStorage_.back().data());
+            ColumnBuffer colBuf(colId, colMeta->type, rowVectorDataStorage_.back().data(), capacity,
+                NullBitmap(rowVectorNullBitmapStorage_.back().data(), capacity));
             rowVec.addColumn(colBuf);
         }
 

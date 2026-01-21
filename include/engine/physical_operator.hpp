@@ -13,8 +13,8 @@ namespace toydb {
 
 class NullBitmap {
 public:
-    NullBitmap() : bitmap_(nullptr) {}
-    explicit NullBitmap(uint8_t* bitmap) : bitmap_(bitmap) {}
+    NullBitmap() : bitmap_(nullptr), size_ {0} {}
+    explicit NullBitmap(uint8_t* bitmap, int64_t size) : bitmap_(bitmap), size_(size) {}
 
     bool isNull(int64_t index) const noexcept {
         if (!bitmap_) return false;
@@ -33,16 +33,26 @@ public:
         }
     }
 
-    void setAllNull(int64_t count) noexcept {
+    void setAllNull(int64_t from, int64_t to) noexcept {
+        tdb_assert(from >= 0 && to >= 0 && from < to, "Invalid range");
         if (bitmap_) {
-            std::memset(bitmap_, 0, (count + 7) / 8);
+            std::memset(bitmap_ + from, 0, static_cast<size_t>((to - from + 7) / 8));
         }
     }
 
-    void clearAllNull(int64_t count) noexcept {
+    void setAllNull() noexcept {
+        setAllNull(0, size_);
+    }
+
+    void clearAllNull(int64_t from, int64_t to) noexcept {
+        tdb_assert(from >= 0 && to >= 0 && from < to, "Invalid range");
         if (bitmap_) {
-            std::memset(bitmap_, 0xFF, (count + 7) / 8);
+            std::memset(bitmap_ + from, 0xFF, static_cast<size_t>((to - from + 7) / 8));
         }
+    }
+
+    void clearAllNull() noexcept {
+        clearAllNull(0, size_);
     }
 
     uint8_t* data() noexcept { return bitmap_; }
@@ -50,14 +60,15 @@ public:
 
 private:
     uint8_t* bitmap_;
+    int64_t size_;
 };
 
 class ColumnBuffer {
    public:
     ColumnBuffer() : columnId{}, type{}, count{0}, data_{nullptr}, nullBitmap_{}, capacity_{0} {}
 
-    ColumnBuffer(ColumnId colId, DataType type, void* data, int64_t capacity, uint8_t* nullBitmap = nullptr)
-        : columnId{std::move(colId)}, type{type}, count{0}, data_{data}, nullBitmap_{nullBitmap}, capacity_{capacity} {}
+    ColumnBuffer(ColumnId colId, DataType type, void* data, int64_t capacity, NullBitmap nullBitmap = {})
+        : columnId{std::move(colId)}, type{type}, count{0}, data_{data}, nullBitmap_{std::move(nullBitmap)}, capacity_{capacity} {}
 
     static int64_t calculateCapacity(size_t dataSize, DataType type) noexcept {
         int32_t typeSize = type.getSize();
